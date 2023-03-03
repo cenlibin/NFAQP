@@ -51,7 +51,7 @@ class VegasAQP:
             self,
             legal_domain,
             actual_domain,
-            target_col_idx,
+            target_id,
     ):
 
         legal_start, legal_size, legal_volumn = splitDomain(legal_domain)
@@ -81,7 +81,7 @@ class VegasAQP:
             x = self.map.get_X(y)  # transform, EQ 8+9
             legal_x = x * legal_size + legal_start
             actual_x = x * actual_size + actual_start
-            target_col_val = actual_x[:, target_col_idx]
+            target_col_val = actual_x[:, target_id]
 
             # evaluate sampled points
             f_eval = self.fn(legal_x) * legal_volumn
@@ -129,6 +129,92 @@ class VegasAQP:
         var = (vars / sigs).sum() / den
 
         return sel.item(), ave.item(), var.item()
+
+    def gb_integrate(
+            self,
+            legal_domain,
+            actual_domain,
+            target_id,
+            groupby_id,
+            groupby_dist_vals,
+    ):
+
+        legal_start, legal_size, legal_volumn = splitDomain(legal_domain)
+        actual_start, actual_size, actual_volumn = splitDomain(actual_domain)
+
+        self.map = VEGASMap(self._N_intervals, self.dim, alpha=self.aplha)
+        self.strat = VEGASStratification(
+            self._N_increment,
+            dim=self.dim,
+            beta=self.beta
+        )
+
+        if self.target_map is not None:
+            self.transfer_map_vec(legal_domain)
+
+        sels, aves, sigs, vars = torch.empty(self.max_iteration), torch.empty(self.max_iteration), \
+                                 torch.empty(self.max_iteration), torch.empty(self.max_iteration)
+
+        # Main loop
+        it = 0
+        while it < self.max_iteration:
+
+            # each iteration
+            neval = self.strat.get_NH(self._starting_N)
+            # Stratified sampling points y and transformed sample points x
+            y = self.strat.get_Y(neval)
+            x = self.map.get_X(y)  # transform, EQ 8+9
+            legal_x = x * legal_size + legal_start
+            actual_x = x * actual_size + actual_start
+            target_col_val = actual_x[:, target_id]
+
+            # evaluate sampled points
+            f_eval = self.fn(legal_x) * legal_volumn
+
+            # update integrator
+            jac = self.map.get_Jac(y)
+            jf_vec = f_eval * jac
+            jf_vec2 = jf_vec ** 2
+            jf_vec2 = jf_vec2.detach()
+
+            if self.use_grid_improve:
+                self.map.accumulate_weight(y, jf_vec2)
+            jf, jf2, target_col_val = self.strat.accumulate_weight(neval, jf_vec, target_col_val)
+
+            ih = jf * self.strat.V_cubes / neval
+            sel = ih.sum()
+
+            target_col_prob = ih / sel
+            prob_vals = target_col_prob * target_col_val
+            ave = prob_vals.sum()
+            var = (target_col_prob * (target_col_val - ave) ** 2).sum()
+
+            # Collect results
+            sig2 = (jf2 * (self.strat.V_cubes ** 2) / neval - ih ** 2).detach().abs()
+            sig2 = (sig2 / neval).sum()
+
+            sels[it] = sel
+            aves[it] = ave
+            vars[it] = var
+            sigs[it] = sig2
+
+            if self.use_grid_improve:
+                self.map.update_map()
+            self.strat.update_DH()
+
+            if sel != 0.0:
+                acc = sig2.sqrt() / sel
+            # print("iter:{} acc:{}, sel:{}, ave:{}".format(it, acc, sel, ave))
+            it += 1
+
+        # get result
+        den = (1.0 / sigs).sum()
+        sel = (sels / sigs).sum() / den
+        ave = (aves / sigs).sum() / den
+        var = (vars / sigs).sum() / den
+
+        return sel.item(), ave.item(), var.item()
+
 
     def transfer_map_vec(self, legal_domain):
         """ vectorize version of transfer_map"""
@@ -179,3 +265,11 @@ class VegasAQP:
         ret_dx_edges = ret_dx_edges / siz
 
         return ret_dx_edges, ret_x_edges
+
+
+    def gb_integrate(
+            
+    ):
+        
+
+        pass

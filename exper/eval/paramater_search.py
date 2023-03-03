@@ -5,7 +5,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import pandas as pd
 import torch
 from query_engine import QueryEngine
-from utils  import DataWrapper
+from table_wapper import TableWapper
 from utils import q_error, relative_error, seed_everything
 
 SEED = 3407
@@ -23,7 +23,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_availabl
 
 def eval():
     model = torch.load(MODEL_PATH, map_location=DEVICE)
-    data_wapper = DataWrapper(DATASET_NAME)
+    data_wapper = TableWrapper(DATASET_NAME)
     aqp_engine = QueryEngine(model, integrator='Vegas', dataset_name=DATASET_NAME, device=DEVICE)
     print(f"full range integrator is {aqp_engine.full_domain_integrate()}")
     queries = data_wapper.generateNQuery(100)

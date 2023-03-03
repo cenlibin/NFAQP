@@ -5,7 +5,7 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from utils  import DataPrefetcher, discretize_dataset, DataWrapper
+from utils  import DataPrefetcher, discretize_dataset, TableWrapper
 from utils import *
 from datasets import get_dataset_from_name
 from references import BNAFEstimator

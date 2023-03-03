@@ -8,7 +8,7 @@ from tqdm import tqdm
 import sys, os
 sys.path.append('/home/clb/AQP')
 from tensorboardX import SummaryWriter
-from utils  import DataPrefetcher, discretize_dataset, DataWrapper
+from utils  import DataPrefetcher, discretize_dataset, TableWrapper
 from utils import *
 
 from datasets import get_dataset_from_name

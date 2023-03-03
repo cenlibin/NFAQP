@@ -1,8 +1,10 @@
 import torch
+import os
+import sys
 import numpy as np
 import pandas as pd
 import scipy
-from .utils import LoadTable
+from .utils import *
 
 def discretize_dataset(data):
     disc_np = data.to_numpy()

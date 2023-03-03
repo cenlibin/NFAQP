@@ -4,7 +4,7 @@ sys.path.append('/home/clb/AQP')
 from model_config import default_configs
 from datasets import get_dataset_from_named
 from utils import *
-from utils  import DataPrefetcher, discretize_dataset, DataWrapper
+from utils  import DataPrefetcher, discretize_dataset, TableWrapper
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
@@ -36,9 +36,7 @@ GPU = args.gpu
 LR = args.lr
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 SAVE_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
-
 seed_everything(SEED)
-
 
 save_interval = -1  # -1 mean not interval save
 eval_interval = 2500
@@ -48,9 +46,7 @@ val_batch_size = train_batch_size * 4
 num_training_steps = 600000
 # watch_interval = num_training_steps // 100000
 watch_interval = 100
-
 device = torch.device(f'cuda:{GPU}')
-
 model_config = default_configs[args.model_size]
 
 

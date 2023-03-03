@@ -8,13 +8,14 @@ import pandas as pd
 import torch
 import logging
 from query_engine import QueryEngine
-from utils  import DataWrapper
+from table_wapper import TableWrapper
 from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT
 
 SEED = 3407
-DATASET_NAME = 'lineitem'
+DATASET_NAME = 'order'
 DEQUAN_TYPE = 'uniform'
-MODEL_SIZE = 'small'
+MODEL_SIZE = 'middle'
+
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
@@ -39,21 +40,22 @@ def eval():
     logger.addHandler(ch)
 
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
-    data_wapper = DataWrapper(DATASET_NAME, OUT_DIR)
+    table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     aqp_engine = QueryEngine(
         model,
         n_sample_points=N_SAMPLE_POINT,
         integrator=INTEGRATOR,
+        deqan_type=DEQUAN_TYPE, 
         dataset_name=DATASET_NAME,
         out_path=OUT_DIR,
         device=DEVICE
     )
     logger.info(f"full range integrator is {aqp_engine.full_domain_integrate()}")
-    queries = data_wapper.generateNQuery(N_QUERIES)
     metics = []
-    for idx, query in enumerate(queries):
-        cnt_real, ave_real, sum_real, var_real, std_real = data_wapper.query(query)
-        sel_real = cnt_real / data_wapper.n
+    for idx in range(N_QUERIES):
+        query = table_wapper.generate_AQP_query(gb=False)
+        cnt_real, ave_real, sum_real, var_real, std_real = table_wapper.query(query)
+        sel_real = cnt_real / table_wapper.n
 
         cnt_pred, ave_pred, sum_pred, var_pred, std_pred = aqp_engine.query(query)
 

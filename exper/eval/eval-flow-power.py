@@ -4,7 +4,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import pandas as pd
 import torch
 from query_engine import QueryEngine
-from utils  import DataWrapper
+from table_wapper import TableWapper
 from utils import MakeFlow, q_error, relative_error, OUTPUT_ROOT, seed_everything
 
 SEED = 1638128
@@ -22,7 +22,7 @@ def eval():
     model = torch.load(MODEL_PATH, map_location=DEVICE)
     aqp_engine = QueryEngine(model, integrator='Vegas', dataset_name=DATASET_NAME)
     
-    data_wapper = DataWrapper(DATASET_NAME)
+    data_wapper = TableWrapper(DATASET_NAME)
     # aqp_engine.test_full_domain_integrate()
     # pass
     query = data_wapper.generateFullQuery()

@@ -15,8 +15,10 @@ class QueryEngine:
             model,
             dataset_name,
             out_path,
+            deqan_type='spline',
             integrator=None,
-            device=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
+            device=torch.device(
+                'cpu' if not torch.cuda.is_available() else 'cuda'),
             n_sample_points=100000,
             alpha=0.4,  # alpha & beta are only used in Vegas
             beta=0.2
@@ -41,7 +43,7 @@ class QueryEngine:
                 n_sample_points=n_sample_points,
                 n_chunks=n_sample_points // 10,
                 device=device
-        )
+            )
 
         elif integrator == 'Vegas':
 
@@ -51,7 +53,7 @@ class QueryEngine:
                 target_map=self._get_target_map(),
                 full_domain=norm_full_domain,
                 n_sample_points=n_sample_points,
-                dim=self.dim, 
+                dim=self.dim,
                 device=device,
                 alpha=alpha,
                 beta=beta,
@@ -100,8 +102,8 @@ class QueryEngine:
                     lb, ub = val
                 elif op == '=':  # could be str
                     # Returns the bin size of the categorical column
-                    if col_name in self.cateMap:
-                        val = self.cateMap[col_name]['cate2id'][val]
+                    if col_name in self.categorical_mapping:
+                        val = self.categorical_mapping[col_name]['cate2id'][val]
                         lb, ub = val, val + 1   # bin size is allways 1 for categorical column
                     else:
                         lb, ub = val, val
@@ -113,24 +115,52 @@ class QueryEngine:
 
             actual_range[col_idx] = [lb, ub]
             # getUnNormalizedValue
-            legal_range[col_idx] = [self.get_normalized_val(col_idx, lb), self.get_normalized_val(col_idx, ub)]
+            legal_range[col_idx] = [self.get_normalized_val(
+                col_idx, lb), self.get_normalized_val(col_idx, ub)]
 
         return torch.FloatTensor(legal_range).to(self.device), torch.FloatTensor(actual_range).to(self.device)
 
     def query(self, query):
-        """
-         @brief Query the data to be integrated. This is a wrapper around : meth : ` integrator. integrate ` which takes a dictionary of predicates and target column indices as input and returns the integration result as
-         @return tuple of count average sum var std : math : ` \ sqrt { var } ` where : meth : ` integrator. integrate ` is called with the list of columns that are to be integrated
-        """
+        if query['gb'] is not None:
+            return self.gb_query(query)
         self._time_start()
-        predicates, target_col_idx = query['where'], query['col']
+        predicates, target_id = query['where'], self.get_col_id(query['target'])
+        predicates, target_col, groupby_col = query['where'], query['target'], query['groupby']
+        target_id, groupby_id = self.get_col_id(target_col), self.get_col_id(groupby_col) if groupby_col is not None else None
+
         legal_range, actual_range = self.get_query_range(predicates)
         sel, ave, var = self.integrator.integrate(
             legal_range,
             actual_range,
-            target_col_idx
+            target_id,
         )
 
+        count = sel * self.n
+        sum = ave * count
+        std = math.sqrt(var)
+        self._time_stop()
+        return count, ave, sum, var, std
+
+    def gb_query(self, query):
+        self._time_start()
+        predicates, target_col, groupby_col = query['where'], query['target'], query['gb']
+        target_id, groupby_id = self.get_col_id(target_col), self.get_col_id(groupby_col)
+        legal_range, actual_range = self.get_query_range(predicates)
+
+        # processing groupby 
+        gb_col_mapping = self.categorical_mapping[groupby_col]
+        gb_dist_vals = gb_col_mapping['id2cate']
+        gb_dist_size = len(gb_dist_vals)
+        gb_dist_ids = torch.arange(0 , gb_dist_size, device=self.device)
+
+        
+        sel, ave, var = self.integrator.gb_integrate(
+            legal_range,
+            actual_range,
+            target_id,
+            groupby_id,
+
+        )
 
         count = sel * self.n
         sum = ave * count
@@ -161,7 +191,7 @@ class QueryEngine:
         # Add a code to the list of code to the list of code values.
         for c, o, v in zip(cols, ops, vals):
             # Return the code of a CATE code.
-            if c in self.cateMap:
+            if c in self.categorical_mapping:
                 # Convert a list of strings to a CATE code.
                 if isinstance(v, list):
                     # Convert a string to a list of codes.
@@ -177,7 +207,7 @@ class QueryEngine:
          @brief Get the ID of a column. This is used to identify the column in the data set that is to be displayed to the user.
          @param col The name of the column. It must be a string in the form'col_name'where'col_name'is the case - sensitive
         """
-        return self.colMap[col]
+        return self.col2id[col]
 
     def get_categorical_cols(self, cols):
         """
@@ -186,20 +216,20 @@ class QueryEngine:
          @return A list of sensible values for the columns in the Categorical object. If there are no sensible values for any of the columns None is
         """
         cs = [self.get_col_id(col) for col in cols]
-        return self.sensible_to_do_range[cs]
-
+        return self.is_numetric_col[cs]
 
     def get_full_range(self):
-        legal_range, actual_range = [[0., 1.]] * len(self.columns), [[0., 1.]] * len(self.columns)
+        legal_range, actual_range = [
+            [0., 1.]] * len(self.columns), [[0., 1.]] * len(self.columns)
         # This function computes the range of the range of the columns in the model.
         for col_name in self.columns:
             col_idx = self.get_col_id(col_name)
             lb, ub = self.Mins[col_idx], self.Maxs[col_idx]
-            legal_range[col_idx] = [self.get_normalized_val(col_idx, lb), self.get_normalized_val(col_idx, ub)]
+            legal_range[col_idx] = [self.get_normalized_val(
+                col_idx, lb), self.get_normalized_val(col_idx, ub)]
             actual_range[col_idx] = [lb, ub]
 
         return torch.FloatTensor(legal_range).to(self.device), torch.FloatTensor(actual_range).to(self.device)
-
 
     def _time_start(self):
         self._st = time()
@@ -271,18 +301,35 @@ class QueryEngine:
         """
          @brief Read meta data from file and store in class variables. This is called after the class is instantiated and before any objects are added
         """
-        
+
         with open(self.meta_path, 'rb') as f:
-            metaData = pickle.load(f)
-        self.columns = metaData['columns']
-        self.colMap = metaData['colMap']
-        self.cateMap = metaData['cateMap']
-        self.dim = metaData['dim']
-        self.n = metaData['n']
-        self.Mins = metaData['Mins']
-        self.Maxs = metaData['Maxs']
-        self.Means = metaData['Means']
-        self.Stds = metaData['Stds']
-        self.minFilter = metaData['minFilter']
-        self.maxFilter = metaData['maxFilter']
-        self.sensible_to_do_range = metaData['sensible']
+            meta_data = pickle.load(f)
+        self.columns = meta_data['columns']
+        self.col2id = meta_data['col2id']
+        self.categorical_mapping = meta_data['cate_mapping']
+        self.dim = meta_data['dim']
+        self.n = meta_data['n']
+        self.Mins = meta_data['Mins']
+        self.Maxs = meta_data['Maxs']
+        self.Means = meta_data['Means']
+        self.Stds = meta_data['Stds']
+        self.minFilter = meta_data['minFilter']
+        self.maxFilter = meta_data['maxFilter']
+        self.is_numetric_col = meta_data['is_numetric_col']
+
+
+    def get_col_id(self, col):
+        """
+            @brief Get the ID of the column. This is useful for determining which columns are in the table and which need to be recalculated when they are added to the result set
+            @param col Column name or index.
+            @return ID of the column or None if not found ( no error is raised ). Note that col may be a string
+        """
+        return self.col2id[col] if isinstance(col, str) else col
+
+    def get_col_name(self, id):
+            """
+                Get the name of a column. This is useful for debugging and to avoid having to re - use the same object every time it is used.
+                @param id - The id of the column to get the name of.
+                @return The name of the column with the given id or None if no such column exists
+            """
+            return self.columns[int(id)]
