@@ -125,10 +125,8 @@ class QueryEngine:
             return self.gb_query(query)
         self._time_start()
         predicates, target_id = query['where'], self.get_col_id(query['target'])
-        predicates, target_col, groupby_col = query['where'], query['target'], query['groupby']
-        target_id, groupby_id = self.get_col_id(target_col), self.get_col_id(groupby_col) if groupby_col is not None else None
-
         legal_range, actual_range = self.get_query_range(predicates)
+
         sel, ave, var = self.integrator.integrate(
             legal_range,
             actual_range,
@@ -151,15 +149,18 @@ class QueryEngine:
         gb_col_mapping = self.categorical_mapping[groupby_col]
         gb_dist_vals = gb_col_mapping['id2cate']
         gb_dist_size = len(gb_dist_vals)
-        gb_dist_ids = torch.arange(0 , gb_dist_size, device=self.device)
+        gb_chunks = torch.arange(0 , gb_dist_size + 1, device=self.device)
+        # normalization
+        gb_mean, gb_std = self.Means[groupby_id], self.Stds[groupby_id]
+        gb_mean, gb_std = torch.FloatTensor([gb_mean, ]).to(self.device), torch.FloatTensor([gb_std, ]).to(self.device)
+        gb_chunks = (gb_chunks - gb_mean) / (gb_std + eps)
 
-        
         sel, ave, var = self.integrator.gb_integrate(
             legal_range,
             actual_range,
             target_id,
             groupby_id,
-
+            gb_chunks,
         )
 
         count = sel * self.n
@@ -319,17 +320,7 @@ class QueryEngine:
 
 
     def get_col_id(self, col):
-        """
-            @brief Get the ID of the column. This is useful for determining which columns are in the table and which need to be recalculated when they are added to the result set
-            @param col Column name or index.
-            @return ID of the column or None if not found ( no error is raised ). Note that col may be a string
-        """
-        return self.col2id[col] if isinstance(col, str) else col
+            return self.col2id[col] if isinstance(col, str) else col
 
     def get_col_name(self, id):
-            """
-                Get the name of a column. This is useful for debugging and to avoid having to re - use the same object every time it is used.
-                @param id - The id of the column to get the name of.
-                @return The name of the column with the given id or None if no such column exists
-            """
             return self.columns[int(id)]

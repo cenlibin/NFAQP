@@ -136,7 +136,7 @@ class VegasAQP:
             actual_domain,
             target_id,
             groupby_id,
-            groupby_dist_vals,
+            groupby_chunks,
     ):
 
         legal_start, legal_size, legal_volumn = splitDomain(legal_domain)
