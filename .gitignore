@@ -1,0 +1,6 @@
+data
+output
+references
+__pycache__
+.DS_Store
+*.pyc
