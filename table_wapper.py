@@ -312,7 +312,9 @@ class TableWrapper:
         """
         """ get true count, ave, sum for a query """
 
-        if query['gb'] is None:
+        if query['gb'] is not None:
+            return self.gb_query(query)
+        else:
             predicates, target_col = query['where'], query['target']
             target_col_idx = self.get_col_id(target_col)
             mask = np.ones(len(self.data)).astype(np.bool_)
@@ -332,22 +334,23 @@ class TableWrapper:
 
             filted_data = self.data_np[:, target_col_idx][mask]
             count = mask.sum()
+            sel = count / (self.n * 1.0)
             sum = filted_data.sum()
             ave = filted_data.mean()
             var = filted_data.var()
             std = filted_data.std()
-            return count, ave, sum, var, std
-        else:
-            gb_col = query['gb']
-            gb_distinct_vals = self.categorical_mapping[gb_col]['id2cate']
-            gb_res = {}
-            for gb_val in tqdm(gb_distinct_vals):
-                sub_query = {
-                    "where": deepcopy(query['where']),
-                    "target": query['target'],
-                    'gb': None
-                }
-                sub_query['where'][gb_col] = ['=', gb_val]
-                gb_res[gb_val] = self.query(sub_query)
-            return gb_res
+            return sel, count, ave, sum, var, std
 
+    def gb_query(self, query):
+        gb_col = query['gb']
+        gb_distinct_vals = self.categorical_mapping[gb_col]['id2cate']
+        results = []
+        for gb_val in tqdm(gb_distinct_vals):
+            sub_query = {
+                "where": deepcopy(query['where']),
+                "target": query['target'],
+                'gb': None
+            }
+            sub_query['where'][gb_col] = ['=', gb_val]
+            results.append(self.query(sub_query))
+        return gb_distinct_vals, results

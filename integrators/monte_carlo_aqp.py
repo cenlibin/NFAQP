@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from .utils import splitDomain, TimeTracker
+from .utils import split_domain, TimeTracker
 
 
 class MonteCarloAQP:
@@ -54,8 +54,8 @@ class MonteCarloAQP:
 
     ):
         t = TimeTracker()
-        legal_start, legal_size, legal_volumn = splitDomain(legal_domain)
-        actual_start, actual_size, actual_volumn = splitDomain(actual_domain)
+        legal_start, legal_size, legal_volumn = split_domain(legal_domain)
+        actual_start, actual_size, actual_volumn = split_domain(actual_domain)
         dim = len(legal_domain)
         """" generate sample points uniformlly """
         n_points_each_chunk = self.n_sample_points // self.n_chunks

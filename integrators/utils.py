@@ -5,7 +5,7 @@ def _add_at_indices(target, indices, source, is_sorted=False):
     target.scatter_add_(dim=0, index=indices, src=source)
 
 
-def splitDomain(domain):
+def split_domain(domain):
     start = domain[:, 0]
     size = domain[:, 1] - domain[:, 0]
     volumn = size.prod(dim=0)

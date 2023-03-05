@@ -1,7 +1,7 @@
 import os
 import sys
-
 sys.path.append('/home/clb/AQP')
+from utils import TimeTracker
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import pandas as pd
@@ -52,18 +52,24 @@ def eval():
     )
     logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
     for i in range(N_QUERIES):
+        
         query = table_wapper.generate_AQP_query(gb=True)
-        # gb_real = table_wapper.query(query)
-        gb_pred = query_engine.query(query)
+        T = TimeTracker()
+        gb_real = table_wapper.query(query)
+        t0 = T.reportIntervalTime('real query')
+        with torch.no_grad():
+            index, result = query_engine.gb_query(query, batch_size=250)
         # print(gb_real)
-
+        t1 = T.reportIntervalTime("aqp query")
+        ms = query_engine.last_qeury_time * 1000
+        print(f'group by tooks {ms:.3f} ms, {ms / len(index):.3f} ms per query')
+        print(f'speed up {t0 / t1}x!')
         # cnt_real, ave_real, sum_real, var_real, std_real = data_wapper.query(query)
         # sel_real = cnt_real / data_wapper.n
 
         # cnt_pred, ave_pred, sum_pred, var_pred, std_pred = aqp_engine.query(query)
 
-        # ms = aqp_engine.last_qeury_time * 1000
-
+        
         pass
 
 

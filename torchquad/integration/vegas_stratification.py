@@ -1,6 +1,6 @@
 from autoray import numpy as anp
 from autoray import astype
-
+import torch
 from .utils import _add_at_indices
 
 
@@ -60,7 +60,7 @@ class VEGASStratification:
         # indices maps each index of weight_all_cubes to the corresponding
         # hypercube index.
         N_cubes_arange = anp.arange(self.N_cubes, dtype=nevals.dtype, like=self.backend)
-        indices = anp.repeat(N_cubes_arange, nevals)
+        indices = torch.repeat_interleave(N_cubes_arange, nevals)
         # Reset JF and JF2, and accumulate the weights and squared weights
         # into them.
         self.JF = anp.zeros([self.N_cubes], dtype=self.dtype, like=self.backend)
@@ -156,7 +156,7 @@ class VEGASStratification:
         positions = self._get_indices(nevals_arange)
 
         # For each hypercube i, repeat its position nevals[i] times
-        position_indices = anp.repeat(nevals_arange, nevals)
+        position_indices = torch.repeat_interleave(nevals_arange, nevals)
         positions = positions[position_indices, :]
 
         # Convert the positions to float, add random offsets to them and scale

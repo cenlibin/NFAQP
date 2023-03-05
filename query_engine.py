@@ -37,28 +37,28 @@ class QueryEngine:
         self.read_meta_data()
 
         # The integrator to use for the simulation.
-        if integrator is None or integrator == 'MonteCarlo':
-            self.integrator = MonteCarloAQP(
-                self.pdf,
-                n_sample_points=n_sample_points,
-                n_chunks=n_sample_points // 10,
-                device=device
-            )
+        # if integrator is None or integrator == 'MonteCarlo':
+        #     self.integrator = MonteCarloAQP(
+        #         self.pdf,
+        #         n_sample_points=n_sample_points,
+        #         n_chunks=n_sample_points // 10,
+        #         device=device
+        #     )
 
-        elif integrator == 'Vegas':
+        # elif integrator == 'Vegas':
 
-            norm_full_domain, _ = self.get_full_range()
-            self.integrator = VegasAQP(
-                self.pdf,
-                target_map=self._get_target_map(),
-                full_domain=norm_full_domain,
-                n_sample_points=n_sample_points,
-                dim=self.dim,
-                device=device,
-                alpha=alpha,
-                beta=beta,
-                max_iteration=4
-            )
+        norm_full_domain, _ = self.get_full_range()
+        self.integrator = VegasAQP(
+            self.pdf,
+            target_map=self._get_target_map(),
+            full_domain=norm_full_domain,
+            n_sample_points=n_sample_points,
+            dim=self.dim,
+            device=device,
+            alpha=alpha,
+            beta=beta,
+            max_iteration=4
+        )
 
     def get_normalized_val(self, col_id, val, norm_type='meanstd'):
         """
@@ -139,7 +139,7 @@ class QueryEngine:
         self._time_stop()
         return count, ave, sum, var, std
 
-    def gb_query(self, query):
+    def gb_query(self, query, batch_size=150):
         self._time_start()
         predicates, target_col, groupby_col = query['where'], query['target'], query['gb']
         target_id, groupby_id = self.get_col_id(target_col), self.get_col_id(groupby_col)
@@ -155,19 +155,40 @@ class QueryEngine:
         gb_mean, gb_std = torch.FloatTensor([gb_mean, ]).to(self.device), torch.FloatTensor([gb_std, ]).to(self.device)
         gb_chunks = (gb_chunks - gb_mean) / (gb_std + eps)
 
-        sel, ave, var = self.integrator.gb_integrate(
-            legal_range,
-            actual_range,
-            target_id,
-            groupby_id,
-            gb_chunks,
-        )
+        # query for small batch 
+        results = torch.empty([gb_dist_size, 6])
+        batch_start = 0
+        if batch_size > gb_dist_size:
+            batch_size = gb_dist_size
+        while batch_start < gb_dist_size:
+            if batch_start + batch_size > gb_dist_size:
+                batch_size = gb_dist_size - batch_start
 
-        count = sel * self.n
-        sum = ave * count
-        std = math.sqrt(var)
+            batch_chunk = gb_chunks[batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
+            
+            sel, ave, var = self.integrator.groupby_integrate(
+                legal_range,
+                actual_range,
+                target_id,
+                groupby_id,
+                batch_chunk,
+            )
+
+            count = sel * self.n
+            sum = ave * count
+            std = var.sqrt()
+
+            batch_result = torch.stack([sel, count, ave, sum, std, var], dim=1)
+            
+            results[batch_start: batch_start + batch_size, :] = batch_result
+            batch_start += batch_size
+        
+        batch_result = batch_result.cpu()
+
         self._time_stop()
-        return count, ave, sum, var, std
+
+        return gb_dist_vals, batch_result
+
 
     def pdf(self, x):
         """

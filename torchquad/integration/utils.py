@@ -210,7 +210,7 @@ def _check_integration_domain(integration_domain):
         return dim
 
 
-# Register anp.repeat for torch
+
 @partial(register_function, "torch", "repeat")
 def _torch_repeat(a, repeats, axis=None):
     import torch

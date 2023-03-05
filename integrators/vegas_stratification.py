@@ -9,11 +9,12 @@ class VEGASStratification:
     EQ <n> refers to equation <n> in the above paper.
     """
 
-    def __init__(self, N_increment, dim, beta=0.75):
+    def __init__(self, N_increment, dim, beta=0.75, device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')):
         """Initialize the VEGAS stratification."""
         self.dim = dim
         # stratification steps per dim, EQ 41
-        self.N_strat = int((N_increment / 4.0) ** (1.0 / dim))  # n_points each dim
+        self.N_strat = int((N_increment / 4.0) **
+                           (1.0 / dim))  # n_points each dim
         self.N_strat = 1000 if self.N_strat > 1000 else self.N_strat
         self.beta = beta  # variable controlling adaptiveness in stratification 0 to 1
         self.N_cubes = self.N_strat ** self.dim  # total number of subdomains
@@ -21,6 +22,7 @@ class VEGASStratification:
 
         self.dtype = torch.float
         self.backend = "torch"
+        self.device = device
 
         # jacobian times f eval and jacobian^2 times f
         self.JF = torch.zeros([self.N_cubes])
@@ -37,9 +39,12 @@ class VEGASStratification:
         indices = torch.repeat_interleave(N_cubes_arange, nevals)
         # Reset JF and JF2, and accumulate the weights and squared weights
         # into them.
-        self.JF = torch.zeros([self.N_cubes]).scatter_add_(0, indices, weight_all_cubes)
-        self.JF2 = torch.zeros([self.N_cubes]).scatter_add_(0, indices, weight_all_cubes ** 2)
-        chunk_target_vals = torch.zeros([self.N_cubes]).scatter_add_(0, indices, target_col_vals) / nevals
+        self.JF = torch.zeros([self.N_cubes]).scatter_add_(
+            0, indices, weight_all_cubes)
+        self.JF2 = torch.zeros([self.N_cubes]).scatter_add_(
+            0, indices, weight_all_cubes ** 2)
+        chunk_target_vals = torch.zeros([self.N_cubes]).scatter_add_(
+            0, indices, target_col_vals) / nevals
         # Store counts
         self.strat_counts = astype(nevals, self.dtype)
 
@@ -51,8 +56,8 @@ class VEGASStratification:
         # EQ 42
         V2 = self.V_cubes * self.V_cubes
         d_tmp = (
-                V2 * self.JF2 / self.strat_counts
-                - (self.V_cubes * self.JF / self.strat_counts) ** 2
+            V2 * self.JF2 / self.strat_counts
+            - (self.V_cubes * self.JF / self.strat_counts) ** 2
         )
         # Sometimes rounding errors produce negative values very close to 0
         d_tmp[d_tmp < 0.0] = 0.0
@@ -92,14 +97,14 @@ class VEGASStratification:
         # idx is anp.arange(len(nevals), like=nevals).
         # torch.meshgrid's indexing argument was added in version 1.10.1,
         # so don't use it yet.
-        
+
         # grid_1d = anp.arange(self.N_strat, like=self.backend)
         # # points = anp.meshgrid(*([grid_1d] * self.dim), indexing="xy", like=self.backend)
         # points = anp.meshgrid(*([grid_1d] * self.dim), like=self.backend)
         # points = anp.stack([mg.ravel() for mg in points], axis=1, like=self.backend
         # )
         # return points
-        
+
         # Repeat idx via broadcasting and divide it by self.N_strat ** d
         # for all dimensions d
         points = anp.reshape(idx, [idx.shape[0], 1])
@@ -119,7 +124,8 @@ class VEGASStratification:
             backend tensor: Sampled points.
         """
         # Get integer positions for each hypercube
-        nevals_arange = anp.arange(len(nevals), dtype=nevals.dtype, like=nevals)
+        nevals_arange = anp.arange(
+            len(nevals), dtype=nevals.dtype, like=nevals)
         positions = self._get_indices(nevals_arange)
 
         # For each hypercube i, repeat its position nevals[i] times

@@ -1,7 +1,7 @@
 from autoray import numpy as anp
 from autoray import astype, to_backend_dtype
 from loguru import logger
-
+import torch
 from .utils import _add_at_indices
 
 
@@ -37,8 +37,8 @@ class VEGASMap:
         x_edges_per_dim = anp.linspace(
             0.0, 1.0, N_edges, dtype=self.dtype, like=self.backend
         )
-        self.x_edges = anp.repeat(
-            anp.reshape(x_edges_per_dim, [1, N_edges]), self.dim, axis=0
+        self.x_edges = torch.repeat_interleave(
+            anp.reshape(x_edges_per_dim, [1, N_edges]), self.dim, dim=0
         )
 
         # Initialize self.weights and self.counts
