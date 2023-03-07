@@ -13,6 +13,14 @@
             "justMyCode": true
         },
         {
+            "name": "eval.py",
+            "type": "python",
+            "request": "launch",
+            "program": "exper/eval.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",

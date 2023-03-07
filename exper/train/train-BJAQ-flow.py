@@ -73,7 +73,7 @@ def train():
         generator=torch.Generator(device='cuda')
         # pin_memory=True
     )
-    T.reportIntervalTime('Load data loader')
+    T.report_interval_time_ms('Load data loader')
     epochs = num_training_steps // len(train_loader) + 1
     print(f'total training steps:{num_training_steps} total epochs:{epochs}')
 
@@ -85,7 +85,7 @@ def train():
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, 0)
-    T.reportIntervalTime('create & setup model')
+    T.report_interval_time_ms('create & setup model')
 
     # ====================================train===========================================
     best_val_score = -1e10

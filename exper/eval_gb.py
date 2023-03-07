@@ -9,9 +9,10 @@ import torch
 import logging
 from query_engine import QueryEngine
 from table_wapper import TableWrapper
-from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT
+from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, groupby_relative_error, get_logger
+import numpy as np
 
-SEED = 376899
+SEED = 8889
 DATASET_NAME = 'order'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'middle'
@@ -22,7 +23,8 @@ MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 N_QUERIES = 100
-N_SAMPLE_POINT = 100000
+N_SAMPLE_POINT = 16000
+GROUPBY_BATCH_SIZE = 600
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
 torch.backends.cudnn.deterministic = False
@@ -31,14 +33,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_availabl
 
 
 def eval():
-    logger = logging.getLogger('logger')
-    logger.setLevel(logging.INFO)
-    fh, ch = logging.FileHandler(os.path.join(OUT_DIR, f'eval-gb.log'), 'w', encoding='utf-8'), logging.StreamHandler()
-    fh.setLevel(logging.INFO)
-    ch.setLevel(logging.INFO)
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-
+    logger = get_logger(OUT_DIR, 'eval-gb.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     query_engine = QueryEngine(
@@ -53,23 +48,31 @@ def eval():
     logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
     for i in range(N_QUERIES):
         
-        query = table_wapper.generate_AQP_query(gb=True)
+        query = table_wapper.generate_query(gb=True)
+        logger.info(table_wapper.get_qry_sql(query)[0])
         T = TimeTracker()
-        gb_real = table_wapper.query(query)
-        t0 = T.reportIntervalTime('real query')
+        index, reals = table_wapper.query(query)
+        t0 = T.report_interval_time_ms('real query')
         with torch.no_grad():
-            index, result = query_engine.gb_query(query, batch_size=250)
-        # print(gb_real)
-        t1 = T.reportIntervalTime("aqp query")
-        ms = query_engine.last_qeury_time * 1000
-        print(f'group by tooks {ms:.3f} ms, {ms / len(index):.3f} ms per query')
-        print(f'speed up {t0 / t1}x!')
-        # cnt_real, ave_real, sum_real, var_real, std_real = data_wapper.query(query)
-        # sel_real = cnt_real / data_wapper.n
-
-        # cnt_pred, ave_pred, sum_pred, var_pred, std_pred = aqp_engine.query(query)
-
+            index, preds = query_engine.gb_query(query, batch_size=GROUPBY_BATCH_SIZE)
+            t1 = T.report_interval_time_ms("batch query")
+            series_index, series_preds = query_engine.gb_serial(query)
+            t2 = T.report_interval_time_ms("serial query")
         
+        logger.info(f'real group by tooks {t0:.3f} ms, {t0 / len(index):.3f} ms per query')
+        logger.info(f'batch group by tooks {t1:.3f} ms, {t1 / len(index):.3f} ms per query')
+        logger.info(f'series group by tooks {t2:.3f} ms, {t2 / len(index):.3f} ms per query')
+        logger.info(f'aqp speed up {t0 / t1:.3f}x  |   batch speed up {t2 / t1 :.3f}x ')
+        rerr = groupby_relative_error(preds, reals)
+
+        for gb_on, s_pred, pred, real in zip(index, series_preds, preds, reals):
+            s = f"{gb_on}: "
+            for agg, sp, p, r in zip(["sel", "count", "ave", "sum", "std", "var"], s_pred, pred, real):
+                s += f'\n|{agg}: {sp:.3f}/{p:.3f}/{r:.3f}({relative_error(sp, r):.3f}%) ({relative_error(p, r):.3f}%)| '
+            logger.info(s)
+
+        break 
+
         pass
 
 

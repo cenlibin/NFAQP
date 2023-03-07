@@ -24,7 +24,7 @@ class TableDataset(Dataset):
 def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None):
     T = TimeTracker()
     if name in ['lineitem-numetric', 'lineitem']:
-        table = LoadTable(name)
+        table = load_table(name)
         T.reportIntervalTime("Loading table")
         data, cate_map = discretize_dataset(table)
         T.reportIntervalTime("discretizing")
@@ -36,24 +36,24 @@ def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None
         
         
     elif 'power' in name:
-        data = LoadTable(name).to_numpy().astype(np.float32)
+        data = load_table(name).to_numpy().astype(np.float32)
         
 
     elif 'BJAQ' in name:
-        table = LoadTable("BJAQ")
+        table = load_table("BJAQ")
         data = table.to_numpy().astype(np.float32)
         data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
         _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
         data = (data - _mean) / (_std + eps)
         
     elif 'random' in name:
-        table = LoadTable('random')
+        table = load_table('random')
         data, cate_map = discretize_dataset(table)
         data = torch.from_numpy(table.to_numpy().astype(np.float32)).cpu()
         mean, std = data.mean(0).view(1, -1), data.std(0).view(1, -1)
         data = (data - mean) / (std + eps)
     elif 'order' in name:
-        table = LoadTable(name)
+        table = load_table(name)
         T.reportIntervalTime("Loading table")
         data, cate_map = discretize_dataset(table)
         T.reportIntervalTime("discretizing")

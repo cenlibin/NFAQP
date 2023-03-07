@@ -58,7 +58,7 @@ def train():
         drop_last=False,
         pin_memory=True
     )
-    T.reportIntervalTime('Load data loader')
+    T.report_interval_time_ms('Load data loader')
     total_training_steps = epochs * len(train_loader)
     print(f'total training steps:{total_training_steps}')
 
@@ -67,7 +67,7 @@ def train():
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, 0)
-    T.reportIntervalTime('create & setup model')
+    T.report_interval_time_ms('create & setup model')
 
     # ====================================train===========================================
     best_val_score = -1e10

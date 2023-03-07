@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from query_engine import QueryEngine
 from table_wapper import TableWapper
-from utils import MakeFlow, q_error, relative_error, seed_everything
+from utils import make_flow, q_error, relative_error, seed_everything
 
 SEED = 1638128
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
@@ -23,7 +23,7 @@ def eval():
     model = torch.load(MODEL_PATH, map_location=DEVICE)
     aqp_engine = QueryEngine(model, integrator='MonteCarlo', dataset_name=DATASET_NAME, device=DEVICE)
     print(f"full range integrator is {aqp_engine.full_domain_integrate()}")
-    data_wapper = TableWrapper(DATASET_NAME)
+    data_wapper = TableWapper(DATASET_NAME)
     queries = data_wapper.generateNQuery(100)
     metics = []
     for idx, query in enumerate(queries):

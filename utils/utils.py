@@ -2,13 +2,13 @@ import os
 from os.path import abspath, dirname
 from nflows import distributions, flows
 import torch
+import logging
 import json
 from time import time
 import numpy as np
 import pandas as pd
 import random
-from references.flow.transform import create_transform
-
+from utils.transform import create_transform
 
 PROJECT_DIR = '/home/clb/AQP'
 DATA_PATH = PROJECT_DIR + '/data'
@@ -17,12 +17,12 @@ OUTPUT_ROOT = PROJECT_DIR + '/output'
 VEGAS_BIG_N = 1000000
 
 
-def MakeFlow(config):
+def make_flow(config):
     transform = create_transform(config)
     distribution = distributions.StandardNormal((config['num_features'],))
     return flows.Flow(transform, distribution)
 
-def LoadTable(dataset_name):
+def load_table(dataset_name):
     data_path = os.path.join(DATA_PATH, '{}.csv'.format(dataset_name))
     if dataset_name == 'order':
         data = pd.read_csv(data_path, sep='\t')
@@ -59,7 +59,6 @@ def write_to_json(key, value):
         f.write(json_str)
 
 
-
 def seed_everything(seed):
     torch.manual_seed(seed)  # Current CPU
     torch.cuda.manual_seed(seed)  # Current GPU
@@ -79,6 +78,7 @@ def test_forward_latency(model, input_dim, n_queries=1000, device="cuda"):
     et = time()
     return (et - st) / n_queries * 1000
 
+
 def get_model_size_mb(model):
     size_mb = 0
     for p in model.parameters():
@@ -87,19 +87,6 @@ def get_model_size_mb(model):
             ps *= s
         size_mb += ps
     return size_mb * 4 / (1024 * 1024)
-
-
-
-def completeColumns(table, columns, operators, vals):
-    """ complete columns not used in query"""
-    ncols = table.dim
-    cs = table.columns
-    os, vs = [None] * ncols, [None] * ncols
-    for c, o, v in zip(columns, operators, vals):
-        idx = table.getColID(c if isinstance(c, str) else c.name)
-        os[idx] = o
-        vs[idx] = v
-    return cs, os, vs
 
 
 
@@ -131,10 +118,20 @@ class DataPrefetcher:
 
 
 def makeUniformSample(dataset_name, sample_rate=0.01):
-    full_table = LoadTable(dataset_name)
+    full_table = load_table(dataset_name)
     output_path = DATA_PATH + \
                   '/{}_{:.4f}.csv'.format(dataset_name, sample_rate)
     cardinary = full_table.shape[0]
     idx = np.random.randint(0, cardinary, size=int(sample_rate * cardinary))
     sampled_table = full_table.iloc[idx]
     sampled_table.to_csv(output_path, index=False)
+
+def get_logger(out_dir, file_name):
+    logger = logging.getLogger('logger')
+    logger.setLevel(logging.INFO)
+    fh, ch = logging.FileHandler(os.path.join(out_dir, file_name), 'w', encoding='utf-8'), logging.StreamHandler()
+    fh.setLevel(logging.INFO)
+    ch.setLevel(logging.INFO)
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    return logger

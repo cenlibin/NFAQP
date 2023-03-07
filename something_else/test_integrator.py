@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from query_engine import QueryEngine
 from table_wapper import TableWapper
-from utils import MakeFlow, q_error, relative_error, seed_everything
+from utils import make_flow, q_error, relative_error, seed_everything
 from torchquad import Simpson, set_up_backend
 set_up_backend("torch", data_type="float32")
 SEED = 1638128

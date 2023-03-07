@@ -83,9 +83,9 @@ def dequantilize_dataset(dataset_name, type='uniform'):
     assert type in ['spline', 'uniform']
     f = spline_dequantize if type == 'spline' else uniform_dequantize
     try:
-        deq_df = LoadTable(f'{dataset_name}-{type}')
+        deq_df = load_table(f'{dataset_name}-{type}')
     except FileNotFoundError:
-        table = LoadTable(dataset_name)
+        table = load_table(dataset_name)
         data, cate_map = discretize_dataset(table)
         for idx, col_name in enumerate(table.columns):
             print(f'{type} dequantilizing {col_name} {idx + 1}/{len(table.columns)}')

@@ -279,10 +279,11 @@ class VEGASMap:
 
 
         """
-
+        self.x_edges = self.x_edges.contiguous()
+        x_pm = x.permute(1, 0).contiguous()         # avoid the torch.searchsorted not contiguous warnning
         ret_Y = torch.empty_like(x)
         for d in range(self.dim):
-            iy = torch.searchsorted(self.x_edges[d, :], x[:, d], right=True)
+            iy = torch.searchsorted(self.x_edges[d, :], x_pm[d, :], right=True)
             """ todo: may need to transform to vectorized implementation """
             for i in range(x.shape[0]):
                 if 0 < iy[i] <= self.N_intervals:

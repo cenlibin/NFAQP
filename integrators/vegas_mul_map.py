@@ -21,22 +21,22 @@ class VEGASMultiMap:
 
         # (dim,n, N_intervals)
         self.dx_edges = (
-            # anp.ones((self.n, self.dim, self.N_intervals), dtype=self.dtype, like=self.backend)
+                # anp.ones((self.n, self.dim, self.N_intervals), dtype=self.dtype, like=self.backend)
                 anp.ones((self.dim, self.n, self.N_intervals), dtype=self.dtype, like=self.backend)
                 / self.N_intervals
         )
-        self.dx_edges = torch.ones((self.dim, self.n, self.N_intervals), device=self.device)
+        # self.dx_edges = torch.ones((self.dim, self.n, self.N_intervals), device=self.device) / self.N_intervals
         # N_edges
         x_edges_per_dim = anp.linspace(
             0.0, 1.0, self.N_edges, dtype=self.dtype, like=self.backend
         )
         # (1, 1, N_edges)
-        x_edges_per_dim = x_edges_per_dim.reshape([1, 1, self.N_edges])
-        
+        tmp = anp.reshape(x_edges_per_dim, [1, 1, self.N_edges])
         # (1, n, N_edges)
-        self.x_edges = torch.repeat_interleave(x_edges_per_dim, self.n, dim=1)
+        tmp = torch.repeat_interleave(tmp, self.n, dim=1)
+        # tmp = anp.repeat(tmp, self.n, axis=1)
         # (dim, n, N_edges)
-        self.x_edges = torch.repeat_interleave(self.x_edges, self.dim, dim=0)
+        self.x_edges = torch.repeat_interleave(tmp, self.dim, axis=0)
 
         # # Initialize self.weights and self.counts
         self._reset_weight()
@@ -79,8 +79,7 @@ class VEGASMultiMap:
         ID = self._get_interval_ID(y)
 
         dim_id = torch.arange(ID.shape[0])
-        dim_id =torch.repeat_interleave(dim_id.reshape(-1, 1, 1),  ID.shape[2], dim=2)
-
+        dim_id =torch.repeat_interleave(dim_id.reshape(-1, 1, 1), ID.shape[2], dim=2)
         dim_id = torch.repeat_interleave(dim_id, ID.shape[1], dim=1)
 
         integrator_id = torch.arange(ID.shape[1])
@@ -332,8 +331,7 @@ class VEGASMultiMap:
         # (DIM, n, N_edges)
         self.x_edges[:, :, 1:-1] = (
                 self.x_edges[dim_id, integrator_id, indices]
-                + d_accu_i / smoothed_weights[dim_id, integrator_id, indices] * self.dx_edges[
-                    dim_id, integrator_id, indices]
+                + d_accu_i / smoothed_weights[dim_id, integrator_id, indices] * self.dx_edges[dim_id, integrator_id, indices]
         )
         finite_edges = torch.isfinite(self.x_edges)
         if not anp.all(finite_edges):

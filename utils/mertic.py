@@ -54,8 +54,19 @@ def relative_error(pred, real):
         return 0
     return 100 * abs(pred - real) / real
 
+def groupby_relative_error(pred, real, eps=1e-9):
+    assert pred.shape == real.shape
+    pred, real = pred[:, 1:], real[:, 1:]
+    err = np.abs(pred - real)
+    rerr = err / (real + eps)
+    return rerr
+
+
 
 def sMAPE(pred, real):
     """ bounded relative error """
     return 2 * abs(pred - real) / (abs(pred) + abs(real))
+
+
+
 

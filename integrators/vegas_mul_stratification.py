@@ -105,7 +105,7 @@ class VEGASMultiStratification:
 
         self.JF = self.JF.view(JF_shape)
         self.JF2 = self.JF2.view(JF_shape)
-        chunk_target_vals = chunk_target_vals.view(JF_shape) / nevals
+        chunk_target_vals = chunk_target_vals.view(JF_shape) / nevals       # (batch, nevals)
 
         # Store counts
         self.strat_counts = astype(nevals, self.dtype)

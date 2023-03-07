@@ -9,7 +9,7 @@ import torch
 import logging
 from query_engine import QueryEngine
 from table_wapper import TableWrapper
-from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT
+from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger
 
 SEED = 3407
 DATASET_NAME = 'order'
@@ -22,7 +22,7 @@ MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 N_QUERIES = 100
-N_SAMPLE_POINT = 100000
+N_SAMPLE_POINT = 16000
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
 torch.backends.cudnn.deterministic = False
@@ -31,17 +31,10 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_availabl
 
 
 def eval():
-    logger = logging.getLogger('logger')
-    logger.setLevel(logging.INFO)
-    fh, ch = logging.FileHandler(os.path.join(OUT_DIR, f'eval.log'), 'w', encoding='utf-8'), logging.StreamHandler()
-    fh.setLevel(logging.INFO)
-    ch.setLevel(logging.INFO)
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-
+    logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
-    aqp_engine = QueryEngine(
+    query_engine = QueryEngine(
         model,
         n_sample_points=N_SAMPLE_POINT,
         integrator=INTEGRATOR,
@@ -50,16 +43,14 @@ def eval():
         out_path=OUT_DIR,
         device=DEVICE
     )
-    logger.info(f"full range integrator is {aqp_engine.full_domain_integrate()}")
+    logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
     metics = []
     for idx in range(N_QUERIES):
-        query = table_wapper.generate_AQP_query(gb=False)
-        cnt_real, ave_real, sum_real, var_real, std_real = table_wapper.query(query)
-        sel_real = cnt_real / table_wapper.n
+        query = table_wapper.generate_query(gb=False)
+        sel_real, cnt_real, ave_real, sum_real, var_real, std_real = table_wapper.query(query)
+        sel_pred, cnt_pred, ave_pred, sum_pred, var_pred, std_pred = query_engine.query(query)
 
-        cnt_pred, ave_pred, sum_pred, var_pred, std_pred = aqp_engine.query(query)
-
-        ms = aqp_engine.last_qeury_time * 1000
+        ms = query_engine.last_qeury_time * 1000
 
         q_cnt, q_ave, q_sum, q_var, q_std = q_error(cnt_pred, cnt_real), q_error(ave_pred, ave_real), \
             q_error(sum_pred, sum_real), q_error(var_pred, var_real), \

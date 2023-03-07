@@ -26,13 +26,13 @@ class TableWrapper:
         self.seed = seed
         self.random_state = np.random.RandomState(self.seed)
         self.dataset_name = dataset_name
-        self.data = LoadTable(dataset_name)
+        self.data = load_table(dataset_name)
         self.n, self.dim = self.data.shape
         self.data_np, self.categorical_mapping = discretize_dataset(self.data)
         self.data_dq = dequantilize_dataset(dataset_name, dequan_type)
         self.categorical_mapping = {col: {'id2cate': id_list, 'cate2id': {cate: id for id, cate in enumerate(id_list)}}
                         for col, id_list in self.categorical_mapping.items()}
-        tracker.reportIntervalTime('Discretize data')
+        tracker.report_interval_time_ms('Discretize data')
         self.columns = list(self.data.columns)
         self.col2id = {col: i for i, col in enumerate(self.columns)}
         
@@ -51,10 +51,10 @@ class TableWrapper:
         self.meta_path = os.path.join(out_path, 'meta.pickle')
         if not os.path.exists(self.meta_path) or not read_meta:
             self.create_meta_data()
-            tracker.reportIntervalTime('Create Meta Data')
+            tracker.report_interval_time_ms('Create Meta Data')
         else:
             self.read_meta_data()
-            tracker.reportIntervalTime('Reads Meta Data')
+            tracker.report_interval_time_ms('Reads Meta Data')
 
     def create_meta_data(self):
         """
@@ -216,7 +216,7 @@ class TableWrapper:
         }
         return qry
 
-    def generate_AQP_query(self, gb=False):
+    def generate_query(self, gb=False):
         """ generate a AQP query """
         qry = {
             "where": {},
@@ -224,14 +224,16 @@ class TableWrapper:
             'gb': None
         }
         # num_filters = rng.randint(self.minFilter, self.maxFilter)
-        num_predicates = self.random_state.randint(1, 4)
+        num_predicates = self.random_state.randint(1, 2)
         num_point = self.random_state.randint(0, min(3, num_predicates))
         num_range = num_predicates - num_point
 
         target_id = self.random_state.choice(self.numetric_ids, 1)
-        groupby_id = self.random_state.choice(self.categorical_ids, 1)
         qry['target'] = self.get_col_name(target_id)
-        qry['gb'] = self.get_col_name(groupby_id)
+        if gb:
+            groupby_id = self.random_state.choice(self.categorical_ids, 1)
+            # groupby_id = 5
+            qry['gb'] = self.get_col_name(groupby_id)
 
         loc = self.random_state.randint(0, self.n)
         tuple0 = self.data.iloc[loc].values
@@ -240,11 +242,12 @@ class TableWrapper:
 
         range_ids = list(self.random_state.choice(self.numetric_ids, size=num_range, replace=False))
         point_ids = list(self.random_state.choice(self.categorical_ids, size=num_point, replace=False))
-        if groupby_id in point_ids:
-            point_ids.remove(int(groupby_id))
+        if gb:
+            if groupby_id in point_ids:
+                point_ids.remove(int(groupby_id))
             num_point -= 1
             num_predicates -= 1
-    
+        
         for id in range_ids:
             col = self.get_col_name(id)
             op = self.random_state.choice(['>=', '<=', 'between'], size=1).item()
@@ -271,6 +274,12 @@ class TableWrapper:
             qry['where'][col] = (op, val)
         
         return qry
+
+
+    def generate_groupby_query(self):
+
+        pass
+
 
     def get_qry_sql(self, qry):
         from_ = f'FROM {self.dataset_name} '
@@ -303,7 +312,7 @@ class TableWrapper:
         """
         """ generate N queries """
         # Set the random state of the generator.
-        return [self.generate_AQP_query() for i in range(n)]
+        return [self.generate_query() for i in range(n)]
 
     def query(self, query):
         """
@@ -353,4 +362,5 @@ class TableWrapper:
             }
             sub_query['where'][gb_col] = ['=', gb_val]
             results.append(self.query(sub_query))
+        results = np.array(results)
         return gb_distinct_vals, results

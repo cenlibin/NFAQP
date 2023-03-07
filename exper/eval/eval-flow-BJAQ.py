@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from query_engine import QueryEngine
 from table_wapper import TableWapper
-from utils import MakeFlow, q_error, relative_error, OUTPUT_ROOT, seed_everything
+from utils import make_flow, q_error, relative_error, OUTPUT_ROOT, seed_everything
 
 SEED = 8888
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
