@@ -1,13 +1,13 @@
 import math
 import pickle
-
+from copy import deepcopy
 import torch
 import os
 from time import time
 from utils import PROJECT_DIR, VEGAS_BIG_N
 from integrators import MonteCarloAQP, VegasAQP, VEGAS
 from datasets import eps
-
+from tqdm import tqdm
 
 class QueryEngine:
     def __init__(
@@ -17,10 +17,9 @@ class QueryEngine:
             out_path,
             deqan_type='spline',
             integrator=None,
-            device=torch.device(
-                'cpu' if not torch.cuda.is_available() else 'cuda'),
-            n_sample_points=100000,
-            alpha=0.4,  # alpha & beta are only used in Vegas
+            device=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
+            n_sample_points=16000,
+            alpha=0.4,                                                          # alpha & beta are only used in Vegas
             beta=0.2
     ):
 
@@ -137,9 +136,61 @@ class QueryEngine:
         sum = ave * count
         std = math.sqrt(var)
         self._time_stop()
-        return count, ave, sum, var, std
+        return sel, count, ave, sum, var, std
 
     def gb_query(self, query, batch_size=150):
+
+        # serial_res = self.gb_serial(query)
+        self._time_start()
+        predicates, target_col, groupby_col = query['where'], query['target'], query['gb']
+        target_id, groupby_id = self.get_col_id(target_col), self.get_col_id(groupby_col)
+        legal_range, actual_range = self.get_query_range(predicates)
+
+        # processing groupby 
+        gb_col_mapping = self.categorical_mapping[groupby_col]
+        gb_dist_vals = gb_col_mapping['id2cate']                # ['g1', 'g2', ...]
+        gb_dist_size = len(gb_dist_vals)
+        gb_chunks = torch.arange(0 , gb_dist_size + 1, device=self.device)      # [0, 1, ..., gb_dist_size - 1, gb_dist_size]
+        # normalization
+        gb_mean, gb_std = self.Means[groupby_id], self.Stds[groupby_id]
+        gb_mean, gb_std = torch.FloatTensor([gb_mean, ]).to(self.device), torch.FloatTensor([gb_std, ]).to(self.device)
+        gb_chunks = (gb_chunks - gb_mean) / (gb_std + eps)
+
+        # query for small batch 
+        results = torch.empty([gb_dist_size, 6])
+        batch_start = 0
+        if batch_size > gb_dist_size:
+            batch_size = gb_dist_size
+        while batch_start < gb_dist_size:
+            if batch_start + batch_size > gb_dist_size:
+                batch_size = gb_dist_size - batch_start
+
+            batch_chunk = gb_chunks[batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
+            
+            sel, ave, var = self.integrator.batch_integrate(
+                legal_range,
+                actual_range,
+                target_id,
+                groupby_id,
+                batch_chunk,
+            )
+
+            count = sel * self.n
+            sum = ave * count
+            std = var.sqrt()
+
+            batch_result = torch.stack([sel, count, ave, sum, var, std], dim=1)
+            
+            results[batch_start: batch_start + batch_size, :] = batch_result
+            batch_start += batch_size
+        
+        results = results.cpu().numpy()
+
+        self._time_stop()
+
+        return gb_dist_vals, results
+
+    def gb_serial(self, query):
         self._time_start()
         predicates, target_col, groupby_col = query['where'], query['target'], query['gb']
         target_id, groupby_id = self.get_col_id(target_col), self.get_col_id(groupby_col)
@@ -157,37 +208,17 @@ class QueryEngine:
 
         # query for small batch 
         results = torch.empty([gb_dist_size, 6])
-        batch_start = 0
-        if batch_size > gb_dist_size:
-            batch_size = gb_dist_size
-        while batch_start < gb_dist_size:
-            if batch_start + batch_size > gb_dist_size:
-                batch_size = gb_dist_size - batch_start
 
-            batch_chunk = gb_chunks[batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
-            
-            sel, ave, var = self.integrator.groupby_integrate(
-                legal_range,
-                actual_range,
-                target_id,
-                groupby_id,
-                batch_chunk,
-            )
+        for idx, gb_val in tqdm(enumerate(gb_dist_vals), total=gb_dist_size):
+            qry = deepcopy(query)
+            qry['gb'] = None
+            qry['where'][groupby_col] = ('=', gb_val)
+            res = self.query(qry)
+            results[idx, :] = torch.Tensor(res, device=results.device)
 
-            count = sel * self.n
-            sum = ave * count
-            std = var.sqrt()
-
-            batch_result = torch.stack([sel, count, ave, sum, std, var], dim=1)
-            
-            results[batch_start: batch_start + batch_size, :] = batch_result
-            batch_start += batch_size
-        
-        batch_result = batch_result.cpu()
-
+        results = results.cpu().numpy()
         self._time_stop()
-
-        return gb_dist_vals, batch_result
+        return gb_dist_vals, results
 
 
     def pdf(self, x):
@@ -228,7 +259,7 @@ class QueryEngine:
         """
          @brief Get the ID of a column. This is used to identify the column in the data set that is to be displayed to the user.
          @param col The name of the column. It must be a string in the form'col_name'where'col_name'is the case - sensitive
-        """
+        """ 
         return self.col2id[col]
 
     def get_categorical_cols(self, cols):
