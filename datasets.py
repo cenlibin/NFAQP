@@ -25,13 +25,13 @@ def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None
     T = TimeTracker()
     if name in ['lineitem-numetric', 'lineitem']:
         table = load_table(name)
-        T.reportIntervalTime("Loading table")
+        T.report_interval_time_ms("Loading table")
         data, cate_map = discretize_dataset(table)
-        T.reportIntervalTime("discretizing")
+        T.report_interval_time_ms("discretizing")
         data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
-        T.reportIntervalTime("dequantilize")
+        T.report_interval_time_ms("dequantilize")
         _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
-        T.reportIntervalTime("cal mean, std")
+        T.report_interval_time_ms("cal mean, std")
         data = (data - _mean) / (_std + eps)
         
         
@@ -49,18 +49,21 @@ def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None
     elif 'random' in name:
         table = load_table('random')
         data, cate_map = discretize_dataset(table)
-        data = torch.from_numpy(table.to_numpy().astype(np.float32)).cpu()
-        mean, std = data.mean(0).view(1, -1), data.std(0).view(1, -1)
-        data = (data - mean) / (std + eps)
+        data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
+        T.report_interval_time_ms("dequantilize")
+        _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
+        T.report_interval_time_ms("cal mean, std")
+        data = (data - _mean) / (_std + eps)
+        
     elif 'order' in name:
         table = load_table(name)
-        T.reportIntervalTime("Loading table")
+        T.report_interval_time_ms("Loading table")
         data, cate_map = discretize_dataset(table)
-        T.reportIntervalTime("discretizing")
+        T.report_interval_time_ms("discretizing")
         data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
-        T.reportIntervalTime("dequantilize")
+        T.report_interval_time_ms("dequantilize")
         _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
-        T.reportIntervalTime("cal mean, std")
+        T.report_interval_time_ms("cal mean, std")
         data = (data - _mean) / (_std + eps)
 
 
@@ -69,7 +72,7 @@ def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None
     
     T = TimeTracker()
     np.random.shuffle(data)
-    T.reportIntervalTime("shuffle")
+    T.report_interval_time_ms("shuffle")
     data = torch.from_numpy(data.astype(np.float32))
     if load_to_device is not None:
         data = data.to(load_to_device)

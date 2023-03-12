@@ -42,7 +42,6 @@ class VegasAQP:
         self._N_increment = n_sample_points // (max_iteration)
         self._N_intervals = max(2, self._N_increment // 10)  # for small N intervals set 2
         self.target_map = target_map
-        self.target_map = None
         self.device = device
         self.map = VEGASMap(self._N_intervals, self.dim, device=device, alpha=self.alpha)
         self.strat = VEGASStratification(

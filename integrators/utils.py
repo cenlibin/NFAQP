@@ -16,7 +16,7 @@ class TimeTracker:
     def __init__(self):
         self._st = time()
 
-    def reportIntervalTime(self, msg=''):
+    def eport_interval_time_ms(self, msg=''):
         et = time()
         t = et - self._st
         self._st = et

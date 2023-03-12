@@ -20,7 +20,8 @@ class QueryEngine:
             device=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
             n_sample_points=16000,
             alpha=0.4,                                                          # alpha & beta are only used in Vegas
-            beta=0.2
+            beta=0.2,
+            max_iteration=4,
     ):
 
         self.model = model
@@ -56,7 +57,7 @@ class QueryEngine:
             device=device,
             alpha=alpha,
             beta=beta,
-            max_iteration=4
+            max_iteration=max_iteration
         )
 
     def get_normalized_val(self, col_id, val, norm_type='meanstd'):

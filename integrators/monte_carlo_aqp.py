@@ -32,16 +32,16 @@ class MonteCarloAQP:
     #     """" generate sample points uniformlly """
     #     points = torch.rand(self.n_sample_points, dim)
     #     points = points * norm_range_size.view(1, -1) + norm_range_start.view(1, -1)
-    #     t.reportIntervalTime('generate sample points')
+    #     t.report_interval_time_ms('generate sample points')
 
     #     """" get the prob density of the points """
     #     prob_density = self.pdf(points)
-    #     t.reportIntervalTime('model forward')
+    #     t.report_interval_time_ms('model forward')
 
     #     """ intergration """
     #     volumn_each_cube = norm_range_size.prod(dim=0) / self.n_sample_points
     #     sel = (prob_density * volumn_each_cube).sum()
-    #     t.reportIntervalTime('calculate agg func')
+    #     t.report_interval_time_ms('calculate agg func')
     #     return sel
 
 
@@ -67,14 +67,14 @@ class MonteCarloAQP:
         norm_x[target_col_idx] = torch.repeat_interleave(target_col_x, n_points_each_chunk)
         legal_x = norm_x * legal_size.view(-1, 1) + legal_start.view(-1, 1)
         legal_x = legal_x.permute(1, 0)
-        t.reportIntervalTime('generate sample points')
+        t.report_interval_time_ms('generate sample points')
 
         """" get the prob density of the points """
         prob_density = self.pdf(legal_x)
         prob_density = prob_density.view(self.n_chunks, n_points_each_chunk)
         prob_density = prob_density.sum(dim=1)
 
-        t.reportIntervalTime('model forward')
+        t.report_interval_time_ms('model forward')
         """ intergration """
         volume_each_cube = legal_size.prod(dim=0) / n_sample_points
         prob_density *= volume_each_cube
@@ -83,5 +83,5 @@ class MonteCarloAQP:
         ave = (prob * target_col_vals).sum()
         var = (prob * (target_col_vals - ave) ** 2).sum()
 
-        t.reportIntervalTime('calculate agg func')
+        t.report_interval_time_ms('calculate agg func')
         return sel.item(), ave.item(), var.item()

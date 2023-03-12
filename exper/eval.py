@@ -12,9 +12,9 @@ from table_wapper import TableWrapper
 from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger
 
 SEED = 3407
-DATASET_NAME = 'order'
-DEQUAN_TYPE = 'uniform'
-MODEL_SIZE = 'middle'
+DATASET_NAME = 'BJAQ'
+DEQUAN_TYPE = 'spline'
+MODEL_SIZE = 'small'
 
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
@@ -22,7 +22,8 @@ MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 N_QUERIES = 100
-N_SAMPLE_POINT = 16000
+N_SAMPLE_POINT = 16000 * 4
+MAX_ITERATION = 1
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
 torch.backends.cudnn.deterministic = False
@@ -37,6 +38,7 @@ def eval():
     query_engine = QueryEngine(
         model,
         n_sample_points=N_SAMPLE_POINT,
+        max_iteration=MAX_ITERATION,
         integrator=INTEGRATOR,
         deqan_type=DEQUAN_TYPE, 
         dataset_name=DATASET_NAME,

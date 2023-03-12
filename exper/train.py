@@ -4,7 +4,8 @@ sys.path.append('/home/clb/AQP')
 from model_config import default_configs
 from datasets import get_dataset_from_named
 from utils import *
-from utils  import DataPrefetcher, discretize_dataset, TableWrapper
+from utils  import DataPrefetcher, discretize_dataset
+from table_wapper import TableWrapper
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
@@ -17,10 +18,11 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default="BJAQ")
+parser.add_argument('--dataset', type=str, default="order")
 parser.add_argument('--gpu', type=int, default=0)
-parser.add_argument('--model-size', type=str, default='small')
+parser.add_argument('--model_size', type=str, default='small')
 parser.add_argument('--lr', type=float, default=0.005)
+parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('--dequan', type=str, default="spline")
 
 
@@ -41,7 +43,7 @@ seed_everything(SEED)
 save_interval = -1  # -1 mean not interval save
 eval_interval = 2500
 grad_norm_clip_value = 5.
-train_batch_size = 512
+train_batch_size = args.batch_size
 val_batch_size = train_batch_size * 4
 num_training_steps = 600000
 # watch_interval = num_training_steps // 100000
@@ -78,7 +80,7 @@ def train():
         batch_size=train_batch_size,
         shuffle=True,
         drop_last=True,
-        generator=torch.Generator(device=device)
+        # generator=torch.Generator(device=device)
         # pin_memory=True,
     )
     val_loader = DataLoader(
@@ -86,13 +88,12 @@ def train():
         batch_size=val_batch_size,
         shuffle=False,
         drop_last=False,
-        generator=torch.Generator(device=device)
+        # generator=torch.Generator(device=device)
         # pin_memory=True
     )
     T.report_interval_time_ms('Load data loader')
     epochs = num_training_steps // len(train_loader) + 1
-    logger.info(
-        f'total training steps:{num_training_steps} total epochs:{epochs}')
+    logger.info(f'total training steps:{num_training_steps} total epochs:{epochs}')
 
     model_config['num_features'] = train_set[0].shape[0]
     transform = create_transform(model_config)
