@@ -1,6 +1,5 @@
 import os
 import sys
-
 sys.path.append('/home/clb/AQP')
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -15,15 +14,16 @@ SEED = 3407
 DATASET_NAME = 'BJAQ'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'small'
-
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 N_QUERIES = 100
-N_SAMPLE_POINT = 16000 * 4
-MAX_ITERATION = 1
+N_SAMPLE_POINT = 16000 * 10
+MAX_ITERATION = 2
+NUM_PREDICATES_RANGE = (1, 1)
+
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
 torch.backends.cudnn.deterministic = False
@@ -48,15 +48,11 @@ def eval():
     logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
     metics = []
     for idx in range(N_QUERIES):
-        query = table_wapper.generate_query(gb=False)
+        query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
         sel_real, cnt_real, ave_real, sum_real, var_real, std_real = table_wapper.query(query)
         sel_pred, cnt_pred, ave_pred, sum_pred, var_pred, std_pred = query_engine.query(query)
 
         ms = query_engine.last_qeury_time * 1000
-
-        q_cnt, q_ave, q_sum, q_var, q_std = q_error(cnt_pred, cnt_real), q_error(ave_pred, ave_real), \
-            q_error(sum_pred, sum_real), q_error(var_pred, var_real), \
-            q_error(std_pred, std_real)
 
         r_cnt, r_ave, r_sum, r_var, r_std = relative_error(cnt_pred, cnt_real), relative_error(ave_pred, ave_real), \
             relative_error(sum_pred, sum_real), relative_error(var_pred, var_real), \
@@ -67,14 +63,10 @@ def eval():
                     format(cnt_real, ave_real, sum_real, var_real, std_real))
         logger.info("pred:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_pred, ave_pred, sum_pred, var_pred, std_pred))
-        logger.info("q_err:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(q_cnt, q_ave, q_sum, q_var, q_std))
         logger.info("r_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}%".
                     format(r_cnt, r_ave, r_sum, r_var, r_std))
-        metics.append([ms, q_cnt, q_ave, q_sum, q_var, q_std,
-                       r_cnt, r_ave, r_sum, r_var, r_std])
-    metics = pd.DataFrame(metics, columns=['ms', 'qcnt', 'qave', 'qsum', 'qvar',
-                                           'qstd', 'rcnt', 'rave', 'rsum', 'rvar', 'rstd'])
+        metics.append([ms, r_cnt, r_ave, r_sum, r_var, r_std])
+    metics = pd.DataFrame(metics, columns=['ms', 'rcnt', 'rave', 'rsum', 'rvar', 'rstd'])
     metics.to_csv(os.path.join(OUT_DIR, 'eval.csv'))
 
     logger.info("mean\n" + str(metics.mean()) + '\n')

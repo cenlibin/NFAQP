@@ -8,7 +8,7 @@ from time import time
 import numpy as np
 import pandas as pd
 import random
-from utils.transform import create_transform
+from .transform import create_transform
 
 PROJECT_DIR = '/home/clb/AQP'
 DATA_PATH = PROJECT_DIR + '/data'
@@ -22,12 +22,21 @@ def make_flow(config):
     distribution = distributions.StandardNormal((config['num_features'],))
     return flows.Flow(transform, distribution)
 
-def load_table(dataset_name):
-    data_path = os.path.join(DATA_PATH, '{}.csv'.format(dataset_name))
-    if dataset_name == 'order':
-        data = pd.read_csv(data_path, sep='\t')
+def load_table(dataset_name, data_dir=None):
+    data_path = os.path.join(DATA_PATH if data_dir is None else data_dir, '{}.csv'.format(dataset_name))
+    heads = {
+        'lineitem': ['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_shipstruct', 'l_shipmode']
+    }
+
+    try:
+        head = heads[dataset_name]
+    except KeyError:
+        head = None
+
+    if dataset_name in ['order', 'lineitem']:
+        data = pd.read_csv(data_path, sep='\t', names=head)
     else:
-        data = pd.read_csv(data_path)
+        data = pd.read_csv(data_path, names=head)
     return data
 
 def clear_json():
@@ -117,14 +126,20 @@ class DataPrefetcher:
         return batch
 
 
-def makeUniformSample(dataset_name, sample_rate=0.01):
-    full_table = load_table(dataset_name)
-    output_path = DATA_PATH + \
-                  '/{}_{:.4f}.csv'.format(dataset_name, sample_rate)
-    cardinary = full_table.shape[0]
-    idx = np.random.randint(0, cardinary, size=int(sample_rate * cardinary))
+def make_uniform_sample(dataset_name, sample_rate=0.01):
+    full_table = load_table(dataset_name, '/home/clb/AQP/data/backup')
+    if dataset_name == 'lineitem':
+        full_table.columns = ['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 
+                            'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag','l_linestatus', 
+                            'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode']
+    output_path = DATA_PATH + f'/{dataset_name}.csv'
+    print(f'saving to {output_path}')
+    n = full_table.shape[0]
+    idx = np.random.randint(0, n, size=int(sample_rate * n))
     sampled_table = full_table.iloc[idx]
-    sampled_table.to_csv(output_path, index=False)
+    sep = '\t' if dataset_name in ['lineitem', 'order'] else ','
+    sampled_table.to_csv(output_path, index=False, sep=sep)
+
 
 def get_logger(out_dir, file_name):
     logger = logging.getLogger('logger')

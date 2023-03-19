@@ -37,28 +37,27 @@ class QueryEngine:
         self.read_meta_data()
 
         # The integrator to use for the simulation.
-        # if integrator is None or integrator == 'MonteCarlo':
-        #     self.integrator = MonteCarloAQP(
-        #         self.pdf,
-        #         n_sample_points=n_sample_points,
-        #         n_chunks=n_sample_points // 10,
-        #         device=device
-        #     )
+        if integrator is None or integrator == 'MonteCarlo':
+            self.integrator = MonteCarloAQP(
+                self.pdf,
+                n_sample_points=n_sample_points,
+                n_chunks=n_sample_points // 10,
+                device=device
+            )
 
-        # elif integrator == 'Vegas':
-
-        norm_full_domain, _ = self.get_full_range()
-        self.integrator = VegasAQP(
-            self.pdf,
-            target_map=self._get_target_map(),
-            full_domain=norm_full_domain,
-            n_sample_points=n_sample_points,
-            dim=self.dim,
-            device=device,
-            alpha=alpha,
-            beta=beta,
-            max_iteration=max_iteration
-        )
+        elif integrator == 'Vegas':
+            norm_full_domain, _ = self.get_full_range()
+            self.integrator = VegasAQP(
+                self.pdf,
+                target_map=self._get_target_map(),
+                full_domain=norm_full_domain,
+                n_sample_points=n_sample_points,
+                dim=self.dim,
+                device=device,
+                alpha=alpha,
+                beta=beta,
+                max_iteration=max_iteration
+            )
 
     def get_normalized_val(self, col_id, val, norm_type='meanstd'):
         """
@@ -121,6 +120,8 @@ class QueryEngine:
         return torch.FloatTensor(legal_range).to(self.device), torch.FloatTensor(actual_range).to(self.device)
 
     def query(self, query):
+        if isinstance(query, list):
+            return self.batch_qeury(query)
         if query['gb'] is not None:
             return self.gb_query(query)
         self._time_start()
@@ -136,6 +137,27 @@ class QueryEngine:
         count = sel * self.n
         sum = ave * count
         std = math.sqrt(var)
+        self._time_stop()
+        return sel, count, ave, sum, var, std
+    
+    def batch_qeury(self, queries):
+        self._time_start()
+    
+        legal_range, actual_range, target_id = [], [], []
+        for query in queries:
+            target_id.append(self.get_col_id(query["target"]))
+            legal, actual = self.get_query_range(query['where'])
+            legal_range.append(legal)
+            actual_range.append(actual)
+        legal_range, actual_range, target_id = torch.stack(legal_range), torch.stack(actual_range), torch.LongTensor(target_id).cpu()
+        sel, ave, var = self.integrator.batch_integrate(
+            legal_range,
+            actual_range,
+            target_id
+        )
+        count = sel * self.n
+        sum = ave * count
+        std = var.sqrt()
         self._time_stop()
         return sel, count, ave, sum, var, std
 
@@ -168,7 +190,7 @@ class QueryEngine:
 
             batch_chunk = gb_chunks[batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
             
-            sel, ave, var = self.integrator.batch_integrate(
+            sel, ave, var = self.integrator.gb_integrate(
                 legal_range,
                 actual_range,
                 target_id,

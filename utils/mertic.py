@@ -44,6 +44,8 @@ def relative_error(pred, real):
         pred = pred.cpu().detach().numpy()
     if isinstance(pred, torch.Tensor):
         pred = pred.cpu().detach().numpy()
+
+    pred, real = float(pred), float(real)
     pred = np.float32(pred)
     real = np.float32(real)
     if real == 0 and pred != 0:

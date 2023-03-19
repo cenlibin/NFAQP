@@ -5,7 +5,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import pandas as pd
 import torch
 from query_engine import QueryEngine
-from table_wapper import TableWapper
+from table_wapper import TableWrapper
 from utils import q_error, relative_error, seed_everything
 
 SEED = 3407

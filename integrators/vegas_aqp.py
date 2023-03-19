@@ -181,7 +181,7 @@ class VegasAQP:
         return ret_dx_edges, ret_x_edges
 
     
-    def batch_integrate(
+    def gb_integrate(
             self,
             legal_domain,
             actual_domain,
@@ -271,7 +271,109 @@ class VegasAQP:
             sig2 = sig2.detach().abs()
             sig2 = (sig2 * neval_inverse).sum(1)
 
+            # Collect results
+            sels[it, :] = sel.view(-1)
+            aves[it, :] = ave.view(-1)
+            vars[it, :] = var.view(-1)
+            sigs[it, :] = sig2.view(-1)
 
+
+            if self.use_grid_improve:
+                self.batch_map.update_map()
+            self.batch_strat.update_DH()
+
+            it += 1
+
+
+        # get final result
+        sigs = sigs.permute(1, 0)
+        den = (1.0 / sigs).sum(1)
+        sel = (sels.permute(1, 0) / sigs).sum(1) / den
+        ave = (aves.permute(1, 0) / sigs).sum(1) / den
+        var = (vars.permute(1, 0) / sigs).sum(1) / den
+
+        return sel, ave, var
+
+    def batch_integrate(
+            self,
+            legal_domain,
+            actual_domain,
+            target_id,
+    ):
+
+        self.batch_size = len(legal_domain)
+        # process domain (batch_size, dim, 2)
+        legal_start, legal_size = legal_domain[:, :, 0], legal_domain[:, :, 1] - legal_domain[:, :, 0]
+        legal_start, legal_size = legal_start.unsqueeze(2), legal_size.unsqueeze(2)
+        legal_volume = legal_size.prod(1)
+        actual_start, actual_size = actual_domain[:, :, 0], actual_domain[:, :, 1] - actual_domain[:, :, 0]
+        
+
+        # vegas map and sampler
+        self.batch_map = VEGASMultiMap(
+            n=self.batch_size,
+            alpha=self.alpha,
+            N_intervals=self._N_intervals,
+            dim=self.dim,
+            device=self.device
+        )
+        
+        self.batch_strat = VEGASMultiStratification(
+            n=self.batch_size, 
+            N_increment=self._N_increment,
+            dim=self.dim,
+            beta=self.beta,
+            device=self.device
+        )
+
+        if self.target_map is not None:
+            self.batch_transfer_map_vec(legal_domain)
+
+        sels, aves, sigs, vars = torch.empty(self.max_iteration, self.batch_size), torch.empty(self.max_iteration, self.batch_size), \
+            torch.empty(self.max_iteration, self.batch_size), torch.empty(self.max_iteration, self.batch_size)
+
+        # Main loop
+        it = 0
+        while it < self.max_iteration:
+
+            # each iteration
+            # (batch, N_cubes)
+            nevals = self.batch_strat.get_NH(self._N_starting)  # 分桶， 每个桶里面n_i个采样点
+            # Stratified sampling points y and transformed sample points x
+            y = self.batch_strat.get_Y(nevals).permute(2, 0, 1)
+            x = self.batch_map.get_X(y)  # transform, EQ 8+9        (dim, batch, n_evals)
+            
+            legal_x = x * legal_size.permute(1, 0, 2) + legal_start.permute(1, 0, 2)
+            legal_x = legal_x.permute(1, 2, 0)                      # (batch, n_evals, dim)               
+            legal_x = legal_x.view(-1, legal_x.shape[-1])     # (batch * n_evals, dim)
+            
+            target_x = x[target_id, :, :]   # [batch, nevals]
+            target_col_vals = target_x * actual_size[:, target_id].unsqueeze(2) + actual_start[:, target_id].unsqueeze(2)
+
+            batch_f_eval = self.fn(legal_x).view(self.batch_size, -1) * legal_volume # (batch, n_evals)
+
+            # finish batch eval, update integrator
+            jac = self.batch_map.get_Jac(y)
+            jf_vec = batch_f_eval * jac
+            jf_vec2 = (jf_vec ** 2).detach()
+            neval_inverse = 1.0 / nevals.type_as(y)
+
+            if self.use_grid_improve:
+                self.batch_map.accumulate_weight(y, jf_vec2)
+            jf, jf2, target_col_vals = self.batch_strat.accumulate_weight(nevals, jf_vec, target_col_vals)
+
+            v_cubes = self.batch_strat.V_cubes          # volume each hyper cube
+
+            # (batch, n_chunks) * [1] / (batch, n_chunks) * [1]
+            ih = jf * (neval_inverse * v_cubes)         # integration each hyper cube
+            sel = ih.sum(1)                             # (batch)
+            target_col_prob = ih / sel.view(-1, 1)      # normalize the prob density to prob        (batch, neval) / (batch, 1)
+            ave = (target_col_prob * target_col_vals).sum(1)
+            var = (((target_col_vals - ave.view(-1, 1)) ** 2) * target_col_prob).sum(1)
+
+            sig2 = jf2 * neval_inverse * (v_cubes ** 2) - pow(ih, 2)
+            sig2 = sig2.detach().abs()
+            sig2 = (sig2 * neval_inverse).sum(1)
 
             # Collect results
             sels[it, :] = sel.view(-1)

@@ -1,0 +1,5 @@
+{
+    "editor.indentSize": "tabSize",
+    "terminal.integrated.env.windows": {"PYTHONPATH":"/home/clb/AQP"}
+    
+}

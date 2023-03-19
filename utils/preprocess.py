@@ -52,7 +52,7 @@ def spline_dequantize(col, eps=1e-9):
     cdf_y = np.insert(counts.cumsum() / counts.sum(), 0, 0.0)  # [0, p(a < x1), ..., p(a < xn), 1]
 
     # step 2: construct CDF
-    cdf = scipy.interpolate.PchipInterpolator(x=cdf_x, y=cdf_y, extrapolate=False)
+    # cdf = scipy.interpolate.PchipInterpolator(x=cdf_x, y=cdf_y, extrapolate=False)
 
     # step 3: construct inverse CDF
     inverse_cdf = scipy.interpolate.PchipInterpolator(x=cdf_y, y=cdf_x, extrapolate=False)
@@ -79,11 +79,14 @@ def spline_dequantize(col, eps=1e-9):
     return deq_col
 
 
-def dequantilize_dataset(dataset_name, type='uniform'):
+def dequantilize_dataset(dataset_name, type='spline', remake=False):
     assert type in ['spline', 'uniform']
     f = spline_dequantize if type == 'spline' else uniform_dequantize
     try:
-        deq_df = load_table(f'{dataset_name}-{type}')
+        if remake:
+            raise FileNotFoundError("remake")
+        else:
+            deq_df = load_table(f'{dataset_name}-{type}')        
     except FileNotFoundError:
         table = load_table(dataset_name)
         data, cate_map = discretize_dataset(table)
@@ -91,6 +94,7 @@ def dequantilize_dataset(dataset_name, type='uniform'):
             print(f'{type} dequantilizing {col_name} {idx + 1}/{len(table.columns)}')
             data[:, idx] = f(data[:, idx])
         deq_df = pd.DataFrame(data=data, columns=table.columns)
-        deq_df.to_csv(os.path.join(DATA_PATH, f'{dataset_name}-{type}.csv'), index=False)
+        if not remake and not os.path.exists(os.path.join(DATA_PATH, f'{dataset_name}-{type}.csv')):
+            deq_df.to_csv(os.path.join(DATA_PATH, f'{dataset_name}-{type}.csv'), index=False)
     return deq_df
 

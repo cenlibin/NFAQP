@@ -216,16 +216,19 @@ class TableWrapper:
         }
         return qry
 
-    def generate_query(self, gb=False):
+    def generate_query(self, gb=False, num_predicates_ranges=None):
         """ generate a AQP query """
         qry = {
             "where": {},
             "target": None,
             'gb': None
         }
-        # num_filters = rng.randint(self.minFilter, self.maxFilter)
-        num_predicates = self.random_state.randint(1, 2)
-        num_point = self.random_state.randint(0, min(3, num_predicates))
+        if num_predicates_ranges is not None:
+            num_predicates = self.random_state.randint(num_predicates_ranges[0], num_predicates_ranges[1] + 1)
+        else:
+            num_predicates = self.random_state.randint(1, 4)
+            
+        num_point = min(self.random_state.randint(0, 3), num_predicates, len(self.categorical_ids))
         num_range = num_predicates - num_point
 
         target_id = self.random_state.choice(self.numetric_ids, 1)

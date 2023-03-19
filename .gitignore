@@ -4,3 +4,4 @@ references
 __pycache__
 .DS_Store
 *.pyc
+*.log

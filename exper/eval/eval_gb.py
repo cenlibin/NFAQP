@@ -13,7 +13,7 @@ from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, groupby
 import numpy as np
 
 SEED = 8889
-DATASET_NAME = 'order'
+DATASET_NAME = 'orders'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'middle'
 

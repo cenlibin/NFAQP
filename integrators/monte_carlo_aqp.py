@@ -21,30 +21,6 @@ class MonteCarloAQP:
         self.n_sample_points = n_sample_points
         self.n_chunks = n_chunks
         self.device = device
-    
-
-
-    # def selectivity(self, norm_range):
-    #     t = TimeTracker()
-    #     norm_range_start, norm_range_size, _ = splitDomain(norm_range)
-    #     dim = len(norm_range)
-
-    #     """" generate sample points uniformlly """
-    #     points = torch.rand(self.n_sample_points, dim)
-    #     points = points * norm_range_size.view(1, -1) + norm_range_start.view(1, -1)
-    #     t.report_interval_time_ms('generate sample points')
-
-    #     """" get the prob density of the points """
-    #     prob_density = self.pdf(points)
-    #     t.report_interval_time_ms('model forward')
-
-    #     """ intergration """
-    #     volumn_each_cube = norm_range_size.prod(dim=0) / self.n_sample_points
-    #     sel = (prob_density * volumn_each_cube).sum()
-    #     t.report_interval_time_ms('calculate agg func')
-    #     return sel
-
-
 
     def integrate(
             self,

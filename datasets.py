@@ -21,19 +21,31 @@ class TableDataset(Dataset):
     def __len__(self):
         return self.n
 
-def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None):
+
+
+def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None, re_dequantilize=False):
     T = TimeTracker()
-    if name in ['lineitem-numetric', 'lineitem']:
+    if name in ['lineitem-numetric', 'lineitem-categorical', 'lineitem']:
         table = load_table(name)
         T.report_interval_time_ms("Loading table")
         data, cate_map = discretize_dataset(table)
         T.report_interval_time_ms("discretizing")
-        data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
+        data = dequantilize_dataset(name, dequantilize_type, remake=re_dequantilize).to_numpy().astype(np.float32)
         T.report_interval_time_ms("dequantilize")
         _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
         T.report_interval_time_ms("cal mean, std")
         data = (data - _mean) / (_std + eps)
-        
+    
+    elif 'order' in name:
+        table = load_table(name)
+        T.report_interval_time_ms("Loading table")
+        data, cate_map = discretize_dataset(table)
+        T.report_interval_time_ms("discretizing")
+        data = dequantilize_dataset(name, dequantilize_type, remake=False).to_numpy().astype(np.float32)
+        T.report_interval_time_ms("dequantilize")
+        _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
+        T.report_interval_time_ms("cal mean, std")
+        data = (data - _mean) / (_std + eps)
         
     elif 'power' in name:
         data = load_table(name).to_numpy().astype(np.float32)
@@ -42,29 +54,19 @@ def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None
     elif 'BJAQ' in name:
         table = load_table("BJAQ")
         data = table.to_numpy().astype(np.float32)
-        data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
+        data = dequantilize_dataset(name, dequantilize_type, remake=re_dequantilize).to_numpy().astype(np.float32)
         _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
         data = (data - _mean) / (_std + eps)
         
     elif 'random' in name:
         table = load_table('random')
         data, cate_map = discretize_dataset(table)
-        data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
+        data = dequantilize_dataset(name, dequantilize_type, remake=re_dequantilize).to_numpy().astype(np.float32)
         T.report_interval_time_ms("dequantilize")
         _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
         T.report_interval_time_ms("cal mean, std")
         data = (data - _mean) / (_std + eps)
         
-    elif 'order' in name:
-        table = load_table(name)
-        T.report_interval_time_ms("Loading table")
-        data, cate_map = discretize_dataset(table)
-        T.report_interval_time_ms("discretizing")
-        data = dequantilize_dataset(name, dequantilize_type).to_numpy().astype(np.float32)
-        T.report_interval_time_ms("dequantilize")
-        _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
-        T.report_interval_time_ms("cal mean, std")
-        data = (data - _mean) / (_std + eps)
 
 
     else:
@@ -82,4 +84,24 @@ def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None
 
 
 
-
+def get_dataloader_from_named(name, batch_size, dequantilize_type='spline', load_to_device=None, re_dequantilize=False):
+    
+    train_set, val_set = get_dataset_from_named(name, dequantilize_type=dequantilize_type, load_to_device=load_to_device)
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+        # generator=torch.Generator(device=device)
+        # pin_memory=True,
+    )
+    val_loader = DataLoader(
+        dataset=val_set,
+        batch_size=batch_size * 4,
+        shuffle=False,
+        drop_last=False,
+        # generator=torch.Generator(device=device)
+        # pin_memory=True
+    )
+    
+    return train_loader, val_loader
