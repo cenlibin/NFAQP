@@ -1,6 +1,8 @@
 import pickle
 from copy import deepcopy
 from tqdm import tqdm
+import os
+from os.path import join, exists
 from utils import * 
 
 OPS = {
@@ -276,7 +278,19 @@ class TableWrapper:
             val = tuple0[id]
             qry['where'][col] = (op, val)
         
-        return qry
+        
+        return qry if self.is_query_legal(qry) else self.generate_query(gb, num_predicates_ranges)
+
+
+    def is_query_legal(self, query):
+        predicates, target_id = query['where'], self.get_col_id(query['target'])
+        legal_range, actual_range = self.get_query_range(predicates)
+        from integrators.utils import split_domain
+        legal_start, legal_size, legal_volume = split_domain(legal_range)
+        if legal_volume == 0:
+            return False
+        return True
+        
 
 
     def generate_groupby_query(self):
@@ -367,3 +381,19 @@ class TableWrapper:
             results.append(self.query(sub_query))
         results = np.array(results)
         return gb_distinct_vals, results
+
+
+
+def make_query(dataset_name, out_dir, dequan_type, n_queries, n_predicates, gb=False):
+    query_name = f'queires-{n_queries}-[{n_predicates[0]}, {n_predicates[1]}]{"-gb" if gb else ""}.json'
+    if exists(join(out_dir, query_name)) and exists(join(out_dir, 'meta.pickle')):
+        return
+    wapper = TableWrapper(dataset_name, out_dir, dequan_type, read_meta=False)
+    queries  =[]
+    for i in range(n_queries):
+        query = wapper.generate_query(gb, num_predicates_ranges=n_predicates)
+        query['real'] = wapper.query(query)
+        queries.append(query)
+        
+    with open(join(out_dir, query_name), 'w', encoding='utf-8') as f:
+        f.write(json.dumps(queries, ensure_ascii=False, indent=4))

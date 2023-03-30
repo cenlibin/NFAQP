@@ -56,6 +56,16 @@ def relative_error(pred, real):
         return 0
     return 100 * abs(pred - real) / real
 
+def batch_relative_error(pred, real):
+    batch, dim = pred.shape
+    pred, real = pred.numpy(), real.numpy()
+    err = np.empty([batch, dim])
+    for bi, (bp, br) in enumerate(zip(pred, real)):
+        for di, (dp, dr) in enumerate(zip(bp, br)):
+            err[bi, di] = relative_error(dp, dr)
+    return err
+
+
 def groupby_relative_error(pred, real, eps=1e-9):
     assert pred.shape == real.shape
     pred, real = pred[:, 1:], real[:, 1:]
@@ -70,5 +80,8 @@ def sMAPE(pred, real):
     return 2 * abs(pred - real) / (abs(pred) + abs(real))
 
 
-
-
+def log_metric(m):
+    s = ''
+    for c in m.index:
+        s += f"{c}:{m[c]:.3f}% \n"
+    return s

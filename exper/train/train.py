@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.append('/home/clb/AQP')
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 from exper.eval.model_config import default_configs
 from datasets import get_dataset_from_named, get_dataloader_from_named
 from utils import *
@@ -18,7 +19,7 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default="lineitem")
+parser.add_argument('--dataset', type=str, default="catalog_sales")
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--model_size', type=str, default='small')
 parser.add_argument('--lr', type=float, default=0.005)
@@ -39,6 +40,7 @@ GPU = args.gpu
 LR = args.lr
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 SAVE_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
+WANDB = False
 seed_everything(SEED)
 
 save_interval = -1  # -1 mean not interval save
@@ -59,18 +61,18 @@ def train():
         shutil.rmtree(SAVE_DIR)
     os.mkdir(SAVE_DIR)
     logger = get_logger(SAVE_DIR, 'train.log')
-
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project=MISSION_TAG,
-        dir=SAVE_DIR,
-        # track hyperparameters and run metadata
-        config={
-            "learning_rate": LR,
-            "dataset": DATASET_NAME,
-            "num_training_steps": num_training_steps,
-        }
-    )
+    if WANDB:
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=MISSION_TAG,
+            dir=SAVE_DIR,
+            # track hyperparameters and run metadata
+            config={
+                "learning_rate": LR,
+                "dataset": DATASET_NAME,
+                "num_training_steps": num_training_steps,
+            }
+        )
 
     # Load Data
     T = TimeTracker()
@@ -112,8 +114,8 @@ def train():
             pbar.update()
 
             if global_step % watch_interval == 0:
-                # summer_writer.add_scalar('loss', loss.detach(), global_step)
-                wandb.log({"loss": loss})
+                if WANDB:
+                    wandb.log({"loss": loss})
             # ====================================interval save============================================
             if save_interval != -1 and (global_step + 1) % save_interval == 0:
                 model.eval()
@@ -133,7 +135,8 @@ def train():
                         val_bar.update()
                     val_logp /= n_val_items
                     logger.info(f'epoch:{epoch} val log density is {val_logp:.4f}')
-                    wandb.log({"eval log likelyhood": val_logp})
+                    if WANDB:
+                        wandb.log({"eval log likelyhood": val_logp})
                 # ====================================save============================================
                 if val_logp > best_val_score:
                     logger.info(f'New best score:{val_logp:.3f} last best score:{best_val_score:.3f} !')
@@ -145,7 +148,8 @@ def train():
         scheduler.step()
         lr = scheduler.get_last_lr()[0]
         logger.info("schedule lr to {}".format(lr))
-        wandb.log({'lr': lr})
+        if WANDB:
+            wandb.log({'lr': lr})
 
         if RE_DEQUAN:
             # re-dequantilization after every epoch to prevent overfitting

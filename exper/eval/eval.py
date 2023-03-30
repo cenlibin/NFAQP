@@ -1,17 +1,17 @@
 import os
 import sys
 sys.path.append('/home/clb/AQP')
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import pandas as pd
 import torch
 import logging
 from query_engine import QueryEngine
-from table_wapper import TableWrapper
+from table_wapper import TableWrapper, make_query
 from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger
 
 SEED = 3407
-DATASET_NAME = 'BJAQ'
+DATASET_NAME = 'movie_companies'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'small'
 MODEL_TAG = f'flow-{MODEL_SIZE}'
@@ -20,8 +20,8 @@ MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 N_QUERIES = 100
-N_SAMPLE_POINT = 16000 * 10
-MAX_ITERATION = 2
+N_SAMPLE_POINT = 16000 * 1
+MAX_ITERATION = 1
 NUM_PREDICATES_RANGE = (1, 1)
 
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
@@ -34,6 +34,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_availabl
 def eval():
     logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
+    # make_query(DATASET_NAME, OUT_DIR, DEQUAN_TYPE, N_QUERIES, NUM_PREDICATES_RANGE, False)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     query_engine = QueryEngine(
         model,
@@ -45,7 +46,7 @@ def eval():
         out_path=OUT_DIR,
         device=DEVICE
     )
-    logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
+    logger.info(f"Full range integrator is {query_engine.full_domain_integrate()}")
     metics = []
     for idx in range(N_QUERIES):
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
