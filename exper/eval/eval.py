@@ -11,7 +11,7 @@ from table_wapper import TableWrapper
 from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger
 
 SEED = 3407
-DATASET_NAME = 'BJAQ'
+DATASET_NAME = 'orders'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'small'
 MODEL_TAG = f'flow-{MODEL_SIZE}'
@@ -20,9 +20,9 @@ MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 N_QUERIES = 100
-N_SAMPLE_POINT = 16000 * 10
-MAX_ITERATION = 2
-NUM_PREDICATES_RANGE = (1, 1)
+N_SAMPLE_POINT = 16000 * 1
+MAX_ITERATION = 1
+NUM_PREDICATES_RANGE = (1, 3)
 
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
@@ -45,7 +45,7 @@ def eval():
         out_path=OUT_DIR,
         device=DEVICE
     )
-    logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
+    logger.info(f"Full range integrator is {query_engine.full_domain_integrate()}")
     metics = []
     for idx in range(N_QUERIES):
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)

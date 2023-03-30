@@ -61,3 +61,42 @@ class MonteCarloAQP:
 
         t.report_interval_time_ms('calculate agg func')
         return sel.item(), ave.item(), var.item()
+
+
+
+    # def integrate(
+    #         self,
+    #         legal_domain,
+    #         actual_domain,
+    #         target_col_idx,
+
+    # ):
+    #     t = TimeTracker()
+    #     legal_start, legal_size, legal_volumn = split_domain(legal_domain)
+    #     actual_start, actual_size, actual_volumn = split_domain(actual_domain)
+    #     dim = len(legal_domain)
+    #     """" generate sample points uniformlly """
+    #     n_sample_points = self.n_sample_points
+     
+    #     norm_x = torch.rand(dim, n_sample_points)
+    #     target_col_vals = norm_x[target_col_idx] * actual_size[target_col_idx] + actual_start[target_col_idx]
+    #     legal_x = norm_x * legal_size.view(-1, 1) + legal_start.view(-1, 1)
+    #     legal_x = legal_x.permute(1, 0)
+    #     t.report_interval_time_ms('generate sample points')
+
+    #     """" get the prob density of the points """
+    #     prob_density = self.pdf(legal_x)
+    #     # prob_density = prob_density.view(self.n_chunks, n_points_each_chunk)
+    #     # prob_density = prob_density.sum(dim=1)
+
+    #     t.report_interval_time_ms('model forward')
+    #     """ intergration """
+    #     volume_each_cube = legal_size.prod(dim=0) / n_sample_points
+    #     prob_density *= volume_each_cube
+    #     sel = prob_density.sum()
+    #     prob = prob_density / sel
+    #     ave = (prob * target_col_vals).sum()
+    #     var = (prob * (target_col_vals - ave) ** 2).sum()
+
+    #     t.report_interval_time_ms('calculate agg func')
+    #     return sel.item(), ave.item(), var.item()

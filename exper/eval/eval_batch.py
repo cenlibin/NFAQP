@@ -1,17 +1,18 @@
 import os
 import sys
 sys.path.append('/home/clb/AQP')
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import pandas as pd
 import torch
 import logging
 from query_engine import QueryEngine
 from table_wapper import TableWrapper
-from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger
+from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger, batch_relative_error, TimeTracker, log_metric
+import numpy as np
 
 SEED = 3407
-DATASET_NAME = 'orders'
+DATASET_NAME = 'BJAQ'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'small'
 MODEL_TAG = f'flow-{MODEL_SIZE}'
@@ -19,8 +20,9 @@ MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
-N_QUERIES = 100
-N_SAMPLE_POINT = 16000
+N_QUERIES = 1000
+BATCH_SIZE = 50
+N_SAMPLE_POINT = 16000 * 1
 MAX_ITERATION = 1
 NUM_PREDICATES_RANGE = (1, 1)
 
@@ -32,7 +34,8 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_availabl
 
 
 def eval():
-    logger = get_logger(OUT_DIR, 'eval.log')
+    global BATCH_SIZE
+    logger = get_logger(OUT_DIR, 'eval-batch.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     query_engine = QueryEngine(
@@ -46,26 +49,33 @@ def eval():
         device=DEVICE
     )
     logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
+    logger.info(f"Integrator:{INTEGRATOR} N_sample_points:{N_SAMPLE_POINT}")
     metics = []
-    
-    query = [table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE) for i in range(N_QUERIES)]
-    batch_pred = query_engine.query(query)
-    batch_real = [table_wapper.query(q) for q in query]
-    
-
-    ms = query_engine.last_qeury_time * 1000 / N_QUERIES
-    logger.info(f"ave query lantency:{ms:.3f}")
-
-    # metics = pd.DataFrame(metics, columns=['ms', 'rcnt', 'rave', 'rsum', 'rvar', 'rstd'])
+    latencies = []
+    sta = 0
+    while sta < N_QUERIES:
+        if sta + BATCH_SIZE > N_QUERIES:
+            sta = 0
+            # BATCH_SIZE = N_QUERIES - sta
+        # sta += BATCH_SIZE
+        query = [table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE) for i in range(BATCH_SIZE)]
+        batch_pred = query_engine.query(query)
+        batch_real = torch.FloatTensor([table_wapper.query(q) for q in query]).cpu()
+        batch_err = batch_relative_error(batch_pred, batch_real)
+        metics.append(batch_err)
+        ms = query_engine.last_qeury_time * 1000 / N_QUERIES
+        latencies.append(ms)
+    metics = np.concatenate(metics, axis=0)
+    metics = pd.DataFrame(metics, columns=['rsel', 'rcnt', 'rave', 'rsum', 'rvar', 'rstd'])
     # metics.to_csv(os.path.join(OUT_DIR, 'eval.csv'))
+    ms = sum(latencies) / len(latencies)
+    logger.info(f"Ave Query Lantency:{ms:.3f} ms")
+    logger.info(f"[mean]\n{log_metric(metics.mean())}")
+    logger.info(f"[.5  ]\n{log_metric(metics.quantile(0.5))}")
+    logger.info(f"[.95 ]\n{log_metric(metics.quantile(0.95))}")
+    logger.info(f"[.99 ]\n{log_metric(metics.quantile(0.99))}")
+    logger.info(f"[max ]\n{log_metric(metics.max())}]")
 
-    # logger.info("mean\n" + str(metics.mean()) + '\n')
-    # logger.info(".5\n" + str(metics.quantile(0.5)) + '\n')
-
-
-#     logger.info(".95", metics.quantile(0.95), '\n')
-#     logger.info(".99", metics.quantile(0.99), '\n')
-#     logger.info("max", metics.max(), '\n')
 
 
 if __name__ == '__main__':

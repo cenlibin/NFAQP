@@ -14,7 +14,7 @@ PROJECT_DIR = '/home/clb/AQP'
 DATA_PATH = PROJECT_DIR + '/data'
 METADATA_DIR = PROJECT_DIR + '/meta_data.json'
 OUTPUT_ROOT = PROJECT_DIR + '/output'
-VEGAS_BIG_N = 1000000
+
 
 
 def make_flow(config):
@@ -25,7 +25,13 @@ def make_flow(config):
 def load_table(dataset_name, data_dir=None):
     data_path = os.path.join(DATA_PATH if data_dir is None else data_dir, '{}.csv'.format(dataset_name))
     heads = {
-        'lineitem': ['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_shipstruct', 'l_shipmode']
+        'lineitem': ['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_shipstruct', 'l_shipmode'],
+        'movie_companies': ['id', 'movie_id', 'company_id', 'company_type_id', 'note'],
+        'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk', 'cs_order_number', 'cs_quantity', 'cs_sales_price']
+    }
+    cate = {
+        'movie_companies': ['company_type_id'],
+        'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk']
     }
 
     try:
@@ -33,10 +39,19 @@ def load_table(dataset_name, data_dir=None):
     except KeyError:
         head = None
 
-    if dataset_name in ['order', 'lineitem']:
+    if dataset_name in ['order', 'lineitem', 'movie_companies']:
         data = pd.read_csv(data_path, sep='\t', names=head)
     else:
         data = pd.read_csv(data_path, names=head)
+    if dataset_name in cate:
+        for col in cate[dataset_name]:
+            data[col].astype('str')
+
+    for col in data.columns:
+        if data.dtypes[col] == 'object':
+            data[col].fillna('NULL')
+        else:
+            data[col].fillna(0)
     return data
 
 def clear_json():
@@ -150,3 +165,7 @@ def get_logger(out_dir, file_name):
     logger.addHandler(fh)
     logger.addHandler(ch)
     return logger
+
+
+
+

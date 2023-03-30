@@ -4,10 +4,13 @@ from copy import deepcopy
 import torch
 import os
 from time import time
-from utils import PROJECT_DIR, VEGAS_BIG_N
+from utils import PROJECT_DIR
 from integrators import MonteCarloAQP, VegasAQP, VEGAS
 from datasets import eps
 from tqdm import tqdm
+
+VEGAS_BIG_N = 1000000 * 2
+VEGAS_ITERATION = 20
 
 class QueryEngine:
     def __init__(
@@ -121,7 +124,7 @@ class QueryEngine:
 
     def query(self, query):
         if isinstance(query, list):
-            return self.batch_qeury(query)
+            return self.batch_query(query)
         if query['gb'] is not None:
             return self.gb_query(query)
         self._time_start()
@@ -140,7 +143,7 @@ class QueryEngine:
         self._time_stop()
         return sel, count, ave, sum, var, std
     
-    def batch_qeury(self, queries):
+    def batch_query(self, queries):
         self._time_start()
     
         legal_range, actual_range, target_id = [], [], []
@@ -158,8 +161,9 @@ class QueryEngine:
         count = sel * self.n
         sum = ave * count
         std = var.sqrt()
+        pred = torch.stack([sel, count, ave, sum, var, std], dim=0).permute(1, 0).cpu()
         self._time_stop()
-        return sel, count, ave, sum, var, std
+        return pred
 
     def gb_query(self, query, batch_size=150):
 
@@ -341,18 +345,16 @@ class QueryEngine:
         """
         print('creating new target map')
         vegas = VEGAS()
-        bigN = VEGAS_BIG_N
-        max_iter = 20
         #bigN = 5000000
         full_domain, _ = self.get_full_range()
         res = vegas.integrate(
             fn=self.pdf,
             dim=len(self.columns),
-            N=bigN,
+            N=VEGAS_BIG_N,
             integration_domain=full_domain,
             use_warmup=True,
             use_grid_improve=True,
-            max_iterations=max_iter
+            max_iterations=VEGAS_ITERATION
         )
         print(f'full integration is {res:.3f}')
         target_map = vegas.map

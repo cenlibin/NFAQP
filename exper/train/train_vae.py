@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append('/home/clb/AQP')
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 from exper.eval.model_config import default_configs
 from datasets import get_dataset_from_named, get_dataloader_from_named
 from utils import *
@@ -16,10 +16,11 @@ import shutil
 import logging
 import wandb
 import argparse
+from baselines.vae.VAE import *
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default="catalog_sales")
+parser.add_argument('--dataset', type=str, default="random")
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--model_size', type=str, default='small')
 parser.add_argument('--lr', type=float, default=0.005)
