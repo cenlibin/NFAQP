@@ -11,7 +11,7 @@ from table_wapper import TableWrapper, make_query
 from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger
 
 SEED = 3407
-DATASET_NAME = 'movie_companies'
+DATASET_NAME = 'orders'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'small'
 MODEL_TAG = f'flow-{MODEL_SIZE}'
@@ -22,7 +22,7 @@ INTEGRATOR = 'Vegas'
 N_QUERIES = 100
 N_SAMPLE_POINT = 16000 * 1
 MAX_ITERATION = 1
-NUM_PREDICATES_RANGE = (1, 1)
+NUM_PREDICATES_RANGE = (1, 3)
 
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
