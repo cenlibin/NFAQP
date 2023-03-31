@@ -84,7 +84,7 @@ class VegasAQP:
             x = self.map.get_X(y)  # transform, EQ 8+9
             legal_x = x * legal_size + legal_start
             actual_x = x * actual_size + actual_start
-            target_col_vals = actual_x[:, target_id]
+            agg_vals = actual_x[:, target_id]
 
             # evaluate sampled points
             f_eval = self.fn(legal_x) * legal_volumn
@@ -97,15 +97,15 @@ class VegasAQP:
 
             if self.use_grid_improve:
                 self.map.accumulate_weight(y, jf_vec2)
-            jf, jf2, target_col_vals = self.strat.accumulate_weight(neval, jf_vec, target_col_vals)
+            jf, jf2, agg_vals = self.strat.accumulate_weight(neval, jf_vec, agg_vals)
 
             ih = jf * self.strat.V_cubes / neval
             sel = ih.sum()
 
             target_col_prob = ih / sel
-            prob_vals = target_col_prob * target_col_vals
+            prob_vals = target_col_prob * agg_vals
             ave = prob_vals.sum()
-            var = (target_col_prob * (target_col_vals - ave) ** 2).sum()
+            var = (target_col_prob * (agg_vals - ave) ** 2).sum()
 
             # Collect results
             sig2 = (jf2 * (self.strat.V_cubes ** 2) / neval - ih ** 2).detach().abs()
@@ -244,7 +244,7 @@ class VegasAQP:
             groupby_x = groupby_x.view(-1, groupby_x.shape[-1])     # (batch * n_evals, dim)
             
             target_x = x[target_id, :, :]   # [batch, nevals]
-            target_col_vals = target_x * actual_size[target_id] + actual_start[target_id]
+            agg_vals = target_x * actual_size[target_id] + actual_start[target_id]
 
             batch_f_eval = self.fn(groupby_x).view(self.batch_size, -1) * groupby_volume # (batch, n_evals)
 
@@ -256,7 +256,7 @@ class VegasAQP:
 
             if self.use_grid_improve:
                 self.batch_map.accumulate_weight(y, jf_vec2)
-            jf, jf2, target_col_vals = self.batch_strat.accumulate_weight(nevals, jf_vec, target_col_vals)
+            jf, jf2, agg_vals = self.batch_strat.accumulate_weight(nevals, jf_vec, agg_vals)
 
             v_cubes = self.batch_strat.V_cubes          # volume each hyper cube
 
@@ -264,8 +264,8 @@ class VegasAQP:
             ih = jf * (neval_inverse * v_cubes)         # integration each hyper cube
             sel = ih.sum(1)                             # (batch)
             target_col_prob = ih / sel.view(-1, 1)      # normalize the prob density to prob        (batch, neval) / (batch, 1)
-            ave = (target_col_prob * target_col_vals).sum(1)
-            var = (((target_col_vals - ave.view(-1, 1)) ** 2) * target_col_prob).sum(1)
+            ave = (target_col_prob * agg_vals).sum(1)
+            var = (((agg_vals - ave.view(-1, 1)) ** 2) * target_col_prob).sum(1)
 
             sig2 = jf2 * neval_inverse * (v_cubes ** 2) - pow(ih, 2)
             sig2 = sig2.detach().abs()
@@ -307,7 +307,7 @@ class VegasAQP:
         legal_start, legal_size = legal_start.unsqueeze(2), legal_size.unsqueeze(2)
         legal_volume = legal_size.prod(1)
         actual_start, actual_size = actual_domain[:, :, 0], actual_domain[:, :, 1] - actual_domain[:, :, 0]
-        
+        batch_idx = torch.arange(self.batch_size, dtype=torch.long, device=self.device)
 
         # vegas map and sampler
         self.batch_map = VEGASMultiMap(
@@ -347,8 +347,8 @@ class VegasAQP:
             legal_x = legal_x.permute(1, 2, 0)                      # (batch, n_evals, dim)               
             legal_x = legal_x.view(-1, legal_x.shape[-1])     # (batch * n_evals, dim)
             
-            target_x = x[target_id, :, :]   # [batch, nevals]
-            target_col_vals = target_x * actual_size[:, target_id].unsqueeze(2) + actual_start[:, target_id].unsqueeze(2)
+            agg_vals = x[target_id, batch_idx, :] * actual_size[batch_idx, target_id].view(-1, 1) + actual_start[batch_idx, target_id].view(-1, 1)
+            # agg_vals = target_x * actual_size[:, target_id].unsqueeze(2) + actual_start[:, target_id].unsqueeze(2)
 
             batch_f_eval = self.fn(legal_x).view(self.batch_size, -1) * legal_volume # (batch, n_evals)
 
@@ -360,7 +360,7 @@ class VegasAQP:
 
             if self.use_grid_improve:
                 self.batch_map.accumulate_weight(y, jf_vec2)
-            jf, jf2, target_col_vals = self.batch_strat.accumulate_weight(nevals, jf_vec, target_col_vals)
+            jf, jf2, agg_vals = self.batch_strat.accumulate_weight(nevals, jf_vec, agg_vals)
 
             v_cubes = self.batch_strat.V_cubes          # volume each hyper cube
 
@@ -368,8 +368,8 @@ class VegasAQP:
             ih = jf * (neval_inverse * v_cubes)         # integration each hyper cube
             sel = ih.sum(1)                             # (batch)
             target_col_prob = ih / sel.view(-1, 1)      # normalize the prob density to prob        (batch, neval) / (batch, 1)
-            ave = (target_col_prob * target_col_vals).sum(1)
-            var = (((target_col_vals - ave.view(-1, 1)) ** 2) * target_col_prob).sum(1)
+            ave = (target_col_prob * agg_vals).sum(1)
+            var = (((agg_vals - ave.view(-1, 1)) ** 2) * target_col_prob).sum(1)
 
             sig2 = jf2 * neval_inverse * (v_cubes ** 2) - pow(ih, 2)
             sig2 = sig2.detach().abs()
@@ -398,7 +398,6 @@ class VegasAQP:
 
         return sel, ave, var
 
-    
     
     
     def batch_transfer_map_vec(self, batch_legal_domain):

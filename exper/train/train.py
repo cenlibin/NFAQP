@@ -1,8 +1,8 @@
 import sys
 import os
 sys.path.append('/home/clb/AQP')
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-from exper.eval.model_config import default_configs
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+from exper.model_config import default_configs
 from datasets import get_dataset_from_named, get_dataloader_from_named
 from utils import *
 from utils  import DataPrefetcher, discretize_dataset
@@ -19,9 +19,9 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default="catalog_sales")
+parser.add_argument('--dataset', type=str, default="pm25")
 parser.add_argument('--gpu', type=int, default=0)
-parser.add_argument('--model_size', type=str, default='small')
+parser.add_argument('--model_size', type=str, default='super-tiny')
 parser.add_argument('--lr', type=float, default=0.005)
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('--dequan', type=str, default="spline")

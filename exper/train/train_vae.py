@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append('/home/clb/AQP')
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-from exper.eval.model_config import default_configs
+from exper.model_config import default_configs
 from datasets import get_dataset_from_named, get_dataloader_from_named
 from utils import *
 from utils  import DataPrefetcher, discretize_dataset

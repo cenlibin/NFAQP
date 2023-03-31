@@ -1,4 +1,4 @@
-import os
+import os, sys
 from os.path import abspath, dirname
 from nflows import distributions, flows
 import torch
@@ -31,7 +31,7 @@ def load_table(dataset_name, data_dir=None):
     }
     cate = {
         'movie_companies': ['company_type_id'],
-        'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk']
+        'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk'],
     }
 
     try:
@@ -168,4 +168,25 @@ def get_logger(out_dir, file_name):
 
 
 
+class HiddenPrints:
+    def __init__(self, activated=True):
+        self.activated = activated
+        self.original_stdout = None
 
+    def open(self):
+        """ no output """
+        sys.stdout.close()
+        sys.stdout = self.original_stdout
+
+    def close(self):
+        """ output """
+        self.original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __enter__(self):
+        if self.activated:
+            self.close()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.activated:
+            self.open()

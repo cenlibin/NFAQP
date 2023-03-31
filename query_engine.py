@@ -152,7 +152,7 @@ class QueryEngine:
             legal, actual = self.get_query_range(query['where'])
             legal_range.append(legal)
             actual_range.append(actual)
-        legal_range, actual_range, target_id = torch.stack(legal_range), torch.stack(actual_range), torch.LongTensor(target_id).cpu()
+        legal_range, actual_range, target_id = torch.stack(legal_range), torch.stack(actual_range), torch.LongTensor(target_id)
         sel, ave, var = self.integrator.batch_integrate(
             legal_range,
             actual_range,

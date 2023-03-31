@@ -1,7 +1,7 @@
 import os
 import sys
 sys.path.append('/home/clb/AQP')
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import pandas as pd
 import torch
@@ -20,11 +20,11 @@ MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
-N_QUERIES = 1000
-BATCH_SIZE = 50
-N_SAMPLE_POINT = 16000 * 1
-MAX_ITERATION = 1
-NUM_PREDICATES_RANGE = (1, 1)
+N_QUERIES = 300
+BATCH_SIZE = 10
+N_SAMPLE_POINT = 16000 * 20
+MAX_ITERATION = 4
+NUM_PREDICATES_RANGE = (1, 3)
 
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
@@ -33,7 +33,7 @@ torch.backends.cudnn.benchmark = True
 torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_available() else 'torch.FloatTensor')
 
 
-def eval():
+def batch_eval():
     global BATCH_SIZE
     logger = get_logger(OUT_DIR, 'eval-batch.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
@@ -55,9 +55,9 @@ def eval():
     sta = 0
     while sta < N_QUERIES:
         if sta + BATCH_SIZE > N_QUERIES:
-            sta = 0
-            # BATCH_SIZE = N_QUERIES - sta
-        # sta += BATCH_SIZE
+            # sta = 0
+            BATCH_SIZE = N_QUERIES - sta
+        sta += BATCH_SIZE
         query = [table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE) for i in range(BATCH_SIZE)]
         batch_pred = query_engine.query(query)
         batch_real = torch.FloatTensor([table_wapper.query(q) for q in query]).cpu()
@@ -79,4 +79,4 @@ def eval():
 
 
 if __name__ == '__main__':
-    eval()
+    batch_eval()

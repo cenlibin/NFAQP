@@ -58,6 +58,14 @@ class TableWrapper:
             self.read_meta_data()
             tracker.report_interval_time_ms('Reads Meta Data')
 
+    def print_columns_info(self):
+        s  = f"\nColumns info for {self.dataset_name}:\n"
+        for col in self.columns:
+            s += f"{col}:{'Category' if col in self.categorical_cols else 'Numeric'}\n"
+        s += f'Num Category:{len(self.categorical_cols)} Num Numeric:{len(self.columns) - len(self.categorical_cols)}\n\n'
+        print(s)
+        return s
+
     def create_meta_data(self):
         """
          @brief Save meta data to file for use by : py : meth : ` read `. This is useful when you want to re - use the object

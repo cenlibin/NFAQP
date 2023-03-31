@@ -27,8 +27,7 @@ parser.add_argument('--neuron_list', type=int, action='store', default=200,
                     help='Latent Dimension size ' +
                          'Default: 200.')
 parser.add_argument('--epochs', type=int, action='store', default=100, help='Number epochs to train VAEAC.')
-parser.add_argument('--log_interval', type=int, action='store',
-                    default=25)
+parser.add_argument('--log_interval', type=int, action='store', default=25)
 parser.add_argument('--rejection', type=int, action='store',
                     default=0)
 parser.add_argument('--num_samples', type=int, action='store',

@@ -56,6 +56,10 @@ def relative_error(pred, real):
         return 0
     return 100 * abs(pred - real) / real
 
+# def relative_error(pred, real):
+#     return 2 * abs(pred - real) / (abs(pred) + abs(real))
+
+
 def batch_relative_error(pred, real):
     batch, dim = pred.shape
     pred, real = pred.numpy(), real.numpy()
