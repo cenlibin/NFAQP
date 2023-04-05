@@ -15,12 +15,12 @@ from utils import *
 from baselines import VerdictEngine, VAEEngine
 
 
-METRIC = sMAPE      #
+METRIC = relative_error                #
 SEED = 3407
-DATASET_NAME = 'pm25'
+DATASET_NAME = 'flights'
 DEQUAN_TYPE = 'spline'
-MODEL_SIZE = 'tiny'
-REMAKE = False
+MODEL_SIZE = 'small'
+REMAKE = True
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
@@ -53,7 +53,7 @@ def eval():
     )
     logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
 
-    verdict_engine = VerdictEngine(DATASET_NAME, N, remake=False)
+    verdict_engine = VerdictEngine(DATASET_NAME, N, remake=REMAKE)
     vae_engine = VAEEngine(DATASET_NAME, N, remake=False)
 
     metics = []

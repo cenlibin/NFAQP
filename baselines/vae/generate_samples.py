@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 import os
 import sys
 sys.path.append('/home/clb/AQP')
-DATASET_NAME = 'lineitem'
+DATASET_NAME = 'flights'
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')
@@ -24,7 +24,7 @@ parser.add_argument('--neuron_list', type=int, action='store', default=200,
 parser.add_argument('--epochs', type=int, action='store', default=100)
 parser.add_argument('--log_interval', type=int, action='store', default=25)
 parser.add_argument('--rejection', type=int, action='store', default=1)
-parser.add_argument('--num_samples', type=int, action='store', default=1000)
+parser.add_argument('--num_samples', type=int, action='store', default=10000)
 parser.add_argument('--seed', type=int, action='store', default=42)
 parser.add_argument('--gpus', type=str, action='store', default='0')
 args = parser.parse_args()
