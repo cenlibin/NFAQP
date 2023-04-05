@@ -9,8 +9,13 @@ from integrators import MonteCarloAQP, VegasAQP, VEGAS
 from datasets import eps
 from tqdm import tqdm
 
-VEGAS_BIG_N = 1000000 * 2
-VEGAS_ITERATION = 20
+VEGAS_BIG_N = 1000000 * 20
+VEGAS_ITERATION = 30
+DELTAS = {
+    'pm25': {'PM2.5': 1, 'Dew_Point': 1, 'Temperature': 0.2, 'Humidity': 1, 'Pressure': 1, 'Wind_Speed': 1},
+    'lineitem': {'l_quantity': 1, 'l_extendedprice': 1, 'l_discount': 0.01, 'l_tax': 0.01}
+}
+
 
 class QueryEngine:
     def __init__(
@@ -22,7 +27,7 @@ class QueryEngine:
             integrator=None,
             device=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
             n_sample_points=16000,
-            alpha=0.4,                                                          # alpha & beta are only used in Vegas
+            alpha=0.4,  # alpha & beta are only used in Vegas
             beta=0.2,
             max_iteration=4,
     ):
@@ -38,6 +43,7 @@ class QueryEngine:
         self.meta_path = os.path.join(out_path, 'meta.pickle')
 
         self.read_meta_data()
+        self.delta = {} if dataset_name not in DELTAS else DELTAS[dataset_name]
 
         # The integrator to use for the simulation.
         if integrator is None or integrator == 'MonteCarlo':
@@ -78,7 +84,7 @@ class QueryEngine:
         else:
             norm_val = (val - self.Means[col_id]) / (self.Stds[col_id])
             norm_val = (norm_val - self.Mins[col_id]) / \
-                (self.Maxs[col_id] - self.Mins[col_id])
+                       (self.Maxs[col_id] - self.Mins[col_id])
             return norm_val
 
     def get_query_range(self, predicates):
@@ -92,21 +98,28 @@ class QueryEngine:
         # Returns a list of range values for each column.
         for col_name in self.columns:
             col_idx = self.get_col_id(col_name)
+            bin = 0 if col_name not in self.delta else self.delta[col_name]
             try:
                 op, val = predicates[col_name]
                 # Returns the bin size of the bin size of the column.
-                if op in ['>', '>=']:
+                if op == '>':
+                    lb, ub = val + bin, self.Maxs[col_idx]
+                elif op == '>=':
                     lb, ub = val, self.Maxs[col_idx]
-                elif op in ['<', '<=']:
+                elif op == '<':
                     lb, ub = self.Mins[col_idx], val
+                elif op == '<=':
+                    lb, ub = self.Mins[col_idx], val + bin
+
                 elif op.lower() in ['in', 'between']:
                     # in this predicate, val should be tupe like (a, b), while is scalar in orther.
                     lb, ub = val
+                    ub += bin
                 elif op == '=':  # could be str
                     # Returns the bin size of the categorical column
                     if col_name in self.categorical_mapping:
                         val = self.categorical_mapping[col_name]['cate2id'][val]
-                        lb, ub = val, val + 1   # bin size is allways 1 for categorical column
+                        lb, ub = val, val + 1  # bin size is allways 1 for categorical column
                     else:
                         lb, ub = val, val
                 else:
@@ -141,18 +154,19 @@ class QueryEngine:
         sum = ave * count
         std = math.sqrt(var)
         self._time_stop()
-        return sel, count, ave, sum, var, std
-    
+        return count, ave, sum, var, std
+
     def batch_query(self, queries):
         self._time_start()
-    
+
         legal_range, actual_range, target_id = [], [], []
         for query in queries:
             target_id.append(self.get_col_id(query["target"]))
             legal, actual = self.get_query_range(query['where'])
             legal_range.append(legal)
             actual_range.append(actual)
-        legal_range, actual_range, target_id = torch.stack(legal_range), torch.stack(actual_range), torch.LongTensor(target_id)
+        legal_range, actual_range, target_id = torch.stack(legal_range), torch.stack(actual_range), torch.LongTensor(
+            target_id)
         sel, ave, var = self.integrator.batch_integrate(
             legal_range,
             actual_range,
@@ -175,9 +189,9 @@ class QueryEngine:
 
         # processing groupby 
         gb_col_mapping = self.categorical_mapping[groupby_col]
-        gb_dist_vals = gb_col_mapping['id2cate']                # ['g1', 'g2', ...]
+        gb_dist_vals = gb_col_mapping['id2cate']  # ['g1', 'g2', ...]
         gb_dist_size = len(gb_dist_vals)
-        gb_chunks = torch.arange(0 , gb_dist_size + 1, device=self.device)      # [0, 1, ..., gb_dist_size - 1, gb_dist_size]
+        gb_chunks = torch.arange(0, gb_dist_size + 1, device=self.device)  # [0, 1, ..., gb_dist_size - 1, gb_dist_size]
         # normalization
         gb_mean, gb_std = self.Means[groupby_id], self.Stds[groupby_id]
         gb_mean, gb_std = torch.FloatTensor([gb_mean, ]).to(self.device), torch.FloatTensor([gb_std, ]).to(self.device)
@@ -192,8 +206,9 @@ class QueryEngine:
             if batch_start + batch_size > gb_dist_size:
                 batch_size = gb_dist_size - batch_start
 
-            batch_chunk = gb_chunks[batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
-            
+            batch_chunk = gb_chunks[
+                          batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
+
             sel, ave, var = self.integrator.gb_integrate(
                 legal_range,
                 actual_range,
@@ -207,10 +222,10 @@ class QueryEngine:
             std = var.sqrt()
 
             batch_result = torch.stack([sel, count, ave, sum, var, std], dim=1)
-            
+
             results[batch_start: batch_start + batch_size, :] = batch_result
             batch_start += batch_size
-        
+
         results = results.cpu().numpy()
 
         self._time_stop()
@@ -227,7 +242,7 @@ class QueryEngine:
         gb_col_mapping = self.categorical_mapping[groupby_col]
         gb_dist_vals = gb_col_mapping['id2cate']
         gb_dist_size = len(gb_dist_vals)
-        gb_chunks = torch.arange(0 , gb_dist_size + 1, device=self.device)
+        gb_chunks = torch.arange(0, gb_dist_size + 1, device=self.device)
         # normalization
         gb_mean, gb_std = self.Means[groupby_id], self.Stds[groupby_id]
         gb_mean, gb_std = torch.FloatTensor([gb_mean, ]).to(self.device), torch.FloatTensor([gb_std, ]).to(self.device)
@@ -246,7 +261,6 @@ class QueryEngine:
         results = results.cpu().numpy()
         self._time_stop()
         return gb_dist_vals, results
-
 
     def pdf(self, x):
         """
@@ -286,7 +300,7 @@ class QueryEngine:
         """
          @brief Get the ID of a column. This is used to identify the column in the data set that is to be displayed to the user.
          @param col The name of the column. It must be a string in the form'col_name'where'col_name'is the case - sensitive
-        """ 
+        """
         return self.col2id[col]
 
     def get_categorical_cols(self, cols):
@@ -300,7 +314,7 @@ class QueryEngine:
 
     def get_full_range(self):
         legal_range, actual_range = [
-            [0., 1.]] * len(self.columns), [[0., 1.]] * len(self.columns)
+                                        [0., 1.]] * len(self.columns), [[0., 1.]] * len(self.columns)
         # This function computes the range of the range of the columns in the model.
         for col_name in self.columns:
             col_idx = self.get_col_id(col_name)
@@ -345,10 +359,18 @@ class QueryEngine:
         """
         print('creating new target map')
         vegas = VEGAS()
-        #bigN = 5000000
+        # bigN = 5000000
         full_domain, _ = self.get_full_range()
+
+        def box_cox(p, lam=0.5):
+            return (p ** lam - 1) / lam if lam != 0 else torch.log(p)
+
+        def f(x):
+            return box_cox(self.pdf(x), lam=0.1)
+
         res = vegas.integrate(
             fn=self.pdf,
+            # fn = f,
             dim=len(self.columns),
             N=VEGAS_BIG_N,
             integration_domain=full_domain,
@@ -395,9 +417,8 @@ class QueryEngine:
         self.maxFilter = meta_data['maxFilter']
         self.is_numetric_col = meta_data['is_numetric_col']
 
-
     def get_col_id(self, col):
-            return self.col2id[col] if isinstance(col, str) else col
+        return self.col2id[col] if isinstance(col, str) else col
 
     def get_col_name(self, id):
-            return self.columns[int(id)]
+        return self.columns[int(id)]

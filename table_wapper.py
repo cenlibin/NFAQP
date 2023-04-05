@@ -3,7 +3,7 @@ from copy import deepcopy
 from tqdm import tqdm
 import os
 from os.path import join, exists
-from utils import * 
+from utils import *
 
 OPS = {
     '>': np.greater,
@@ -33,13 +33,13 @@ class TableWrapper:
         self.data_np, self.categorical_mapping = discretize_dataset(self.data)
         self.data_dq = dequantilize_dataset(dataset_name, dequan_type)
         self.categorical_mapping = {col: {'id2cate': id_list, 'cate2id': {cate: id for id, cate in enumerate(id_list)}}
-                        for col, id_list in self.categorical_mapping.items()}
+                                    for col, id_list in self.categorical_mapping.items()}
         tracker.report_interval_time_ms('Discretize data')
         self.columns = list(self.data.columns)
         self.col2id = {col: i for i, col in enumerate(self.columns)}
-        
+
         self.numetric_ids, self.categorical_ids = [], []
-        self.numetric_cols , self.categorical_cols = [], []
+        self.numetric_cols, self.categorical_cols = [], []
         for col in self.columns:
             id = self.get_col_id(col)
             if col in self.categorical_mapping:
@@ -48,9 +48,9 @@ class TableWrapper:
             else:
                 self.numetric_ids.append(id)
                 self.numetric_cols.append(col)
-        
 
         self.meta_path = os.path.join(out_path, 'meta.pickle')
+        self.query_sql = open(os.path.join(out_path, 'query.sql'), 'w')
         if not os.path.exists(self.meta_path) or not read_meta:
             self.create_meta_data()
             tracker.report_interval_time_ms('Create Meta Data')
@@ -59,7 +59,7 @@ class TableWrapper:
             tracker.report_interval_time_ms('Reads Meta Data')
 
     def print_columns_info(self):
-        s  = f"\nColumns info for {self.dataset_name}:\n"
+        s = f"\nColumns info for {self.dataset_name}:\n"
         for col in self.columns:
             s += f"{col}:{'Category' if col in self.categorical_cols else 'Numeric'}\n"
         s += f'Num Category:{len(self.categorical_cols)} Num Numeric:{len(self.columns) - len(self.categorical_cols)}\n\n'
@@ -123,13 +123,12 @@ class TableWrapper:
         return self.col2id[col] if isinstance(col, str) else col
 
     def get_col_name(self, id):
-            """
+        """
              Get the name of a column. This is useful for debugging and to avoid having to re - use the same object every time it is used.
              @param id - The id of the column to get the name of.
              @return The name of the column with the given id or None if no such column exists
             """
-            return self.columns[int(id)]
-
+        return self.columns[int(id)]
 
     def get_normalized_value(self, col_id, val, norm_type='meanstd'):
         """
@@ -221,7 +220,7 @@ class TableWrapper:
         """
         qry = {
             "where": {},
-            "col": 1, 
+            "col": 1,
             'gb': None
         }
         return qry
@@ -237,7 +236,7 @@ class TableWrapper:
             num_predicates = self.random_state.randint(num_predicates_ranges[0], num_predicates_ranges[1] + 1)
         else:
             num_predicates = self.random_state.randint(1, 4)
-            
+
         num_point = min(self.random_state.randint(0, 3), num_predicates, len(self.categorical_ids))
         num_range = num_predicates - num_point
 
@@ -260,7 +259,7 @@ class TableWrapper:
                 point_ids.remove(int(groupby_id))
             num_point -= 1
             num_predicates -= 1
-        
+
         for id in range_ids:
             col = self.get_col_name(id)
             op = self.random_state.choice(['>=', '<=', 'between'], size=1).item()
@@ -274,9 +273,9 @@ class TableWrapper:
                 val = tuple0[id]
                 eps = 1e-3
                 if op == '>=' and abs(val - self.Maxs[id]) < eps:
-                        op = '<='
+                    op = '<='
                 elif op == '<=' and abs(val - self.Mins[id]) < eps:
-                        op = '>='
+                    op = '>='
 
             qry['where'][col] = (op, val)
 
@@ -285,10 +284,11 @@ class TableWrapper:
             op = '='
             val = tuple0[id]
             qry['where'][col] = (op, val)
-        
-        
-        return qry if self.is_query_legal(qry) else self.generate_query(gb, num_predicates_ranges)
-
+        if not self.is_query_legal(qry):
+            qry = self.generate_query(gb, num_predicates_ranges)
+        for sql in self.get_qry_sql(qry):
+            self.query_sql.write(sql + ';\n')
+        return qry
 
     def is_query_legal(self, query):
         predicates, target_id = query['where'], self.get_col_id(query['target'])
@@ -298,13 +298,10 @@ class TableWrapper:
         if legal_volume == 0:
             return False
         return True
-        
-
 
     def generate_groupby_query(self):
 
         pass
-
 
     def get_qry_sql(self, qry):
         from_ = f'FROM {self.dataset_name} '
@@ -313,17 +310,21 @@ class TableWrapper:
         else:
             where = 'WHERE '
             for col, (op, val) in qry['where'].items():
+                col = f'`{col}`'
                 if where != 'WHERE ':
                     where += 'AND '
+                if op == '=':
+                    val = f'\'{val}\''
                 if op == 'between':
                     lower, upper = val
                     where += f'{col} BETWEEN {lower} AND {upper} '
                 else:
                     where += f'{col} {op} {val} '
         target, gb = qry['target'], qry['gb']
-        groupby = f'GROUP BY {gb} ' if gb is not None else ''
+        target = f'`{target}`'
+        groupby = f'GROUP BY `{gb}` ' if gb is not None else ''
         sqls = []
-        for agg in ['COUNT', 'AVG', 'SUM', 'VAR', 'STD']:
+        for agg in ['COUNT', 'AVG', 'SUM', 'VARIANCE', 'STD']:
             sql = f'SELECT {agg}({target}) ' + from_ + where + groupby
             sqls.append(sql)
         return sqls
@@ -373,7 +374,7 @@ class TableWrapper:
             ave = filted_data.mean()
             var = filted_data.var()
             std = filted_data.std()
-            return sel, count, ave, sum, var, std
+            return sel, (count, ave, sum, var, std)
 
     def gb_query(self, query):
         gb_col = query['gb']
@@ -390,6 +391,8 @@ class TableWrapper:
         results = np.array(results)
         return gb_distinct_vals, results
 
+    def __del__(self):
+        self.query_sql.close()
 
 
 def make_query(dataset_name, out_dir, dequan_type, n_queries, n_predicates, gb=False):
@@ -397,11 +400,11 @@ def make_query(dataset_name, out_dir, dequan_type, n_queries, n_predicates, gb=F
     if exists(join(out_dir, query_name)) and exists(join(out_dir, 'meta.pickle')):
         return
     wapper = TableWrapper(dataset_name, out_dir, dequan_type, read_meta=False)
-    queries  =[]
+    queries = []
     for i in range(n_queries):
         query = wapper.generate_query(gb, num_predicates_ranges=n_predicates)
         query['real'] = wapper.query(query)
         queries.append(query)
-        
+
     with open(join(out_dir, query_name), 'w', encoding='utf-8') as f:
         f.write(json.dumps(queries, ensure_ascii=False, indent=4))

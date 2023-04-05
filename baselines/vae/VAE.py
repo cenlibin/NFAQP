@@ -86,8 +86,7 @@ def read_pickle(fileName):
 
 
 def transform_forward(args, df, num_cols, cat_cols, encoding_type):
-    assert (encoding_type == "hot_hot" or encoding_type ==
-            "num_num" or encoding_type == "hot_num")
+    assert (encoding_type == "hot_hot" or encoding_type == "num_num" or encoding_type == "hot_num")
     all_columns = []
     all_columns.extend(cat_cols)
     all_columns.extend(num_cols)
@@ -131,7 +130,7 @@ def transform_forward(args, df, num_cols, cat_cols, encoding_type):
                 df[c] = pd.cut(df[c], 5)
                 unique = df[c].unique()
                 unique = unique.tolist()
-                col_info[c] = (si, si+len(unique), unique)
+                col_info[c] = (si, si + len(unique), unique)
                 si = si + len(unique)
             else:
                 min_map[c] = df[c].min()
@@ -141,9 +140,8 @@ def transform_forward(args, df, num_cols, cat_cols, encoding_type):
                 si += 1
     print("Completed min-max Normalization")
     # store all the info to a pickle file
-    exp_info = ExpInfo(args, min_map, max_map, cat_cols,
-                       num_cols, encoding_type, col_info)
-    write_pickle(exp_info.output_dir+"exp_info", exp_info)
+    exp_info = ExpInfo(args, min_map, max_map, cat_cols, num_cols, encoding_type, col_info)
+    write_pickle(exp_info.output_dir + "exp_info", exp_info)
 
     # now convert each tuple into this real-valued vector
     np_in = np.zeros((df.shape[0], si)).astype(float)

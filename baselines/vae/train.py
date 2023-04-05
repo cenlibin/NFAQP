@@ -1,13 +1,13 @@
+from argparse import ArgumentParser
+import time
+from utils import load_table
+from VAE import *
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 import os
 import sys
 sys.path.append('/home/clb/AQP')
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-from VAE import *
-from utils import load_table
-import time
 
-from argparse import ArgumentParser
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='vaeaqp',
                     help='Model name to be stored')
@@ -26,7 +26,8 @@ parser.add_argument('--latent_dim', type=int, action='store', default=64,
 parser.add_argument('--neuron_list', type=int, action='store', default=200,
                     help='Latent Dimension size ' +
                          'Default: 200.')
-parser.add_argument('--epochs', type=int, action='store', default=100, help='Number epochs to train VAEAC.')
+parser.add_argument('--epochs', type=int, action='store',
+                    default=100, help='Number epochs to train VAEAC.')
 parser.add_argument('--log_interval', type=int, action='store', default=25)
 parser.add_argument('--rejection', type=int, action='store',
                     default=0)

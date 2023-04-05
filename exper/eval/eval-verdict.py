@@ -11,18 +11,18 @@ import pyverdict
 import pymysql
 from query_engine import QueryEngine
 from table_wapper import TableWrapper
-from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger, TimeTracker, sMAPE, HiddenPrints
+from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, get_logger, TimeTracker, sMAPE, HiddenPrints, get_err
 
 host = 'localhost'
 user = 'root'
 password = '7837'
 port = 3306
-metric = sMAPE
+metric = relative_error
 SEED = 3407
-DATASET_NAME = 'pm25'
+DATASET_NAME = 'orders'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
-REMAKE = False
+REMAKE = True
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
@@ -113,24 +113,34 @@ def eval():
     metics = []
     for idx in range(N_QUERIES):
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
-        sel_real, cnt_real, ave_real, sum_real, var_real, std_real = table_wapper.query(query)
+        real = table_wapper.query(query)
+        
+        # sel_real, cnt_real, ave_real, sum_real, var_real, std_real = table_wapper.query(query)
         T = TimeTracker()
-        sel_pred, cnt_pred, ave_pred, sum_pred, var_pred, std_pred = query_engine.query(query)
+        flow_pred = query_engine.query(query)
+        # sel_pred, cnt_pred, ave_pred, sum_pred, var_pred, std_pred = query_engine.query(query)
         t1 = T.report_interval_time_ms(f"flow {query}")
-        cnt_ver, ave_ver, sum_ver, var_ver, std_ver = verdictdb_query(query)
+        verdict_pred = verdictdb_query(query)
+        # cnt_ver, ave_ver, sum_ver, var_ver, std_ver = verdictdb_query(query)
         t2 = T.report_interval_time_ms(f"verdict {query}")
-        # cnt_ver, ave_ver, sum_ver, var_ver, std_ver = np.array([cnt_ver]), np.array([ave_ver]), np.array([sum_ver]), np.array([var_ver]), np.array([std_ver])
 
-        fr_cnt, fr_ave, fr_sum, fr_var, fr_std = metric(cnt_pred, cnt_real), metric(ave_pred, ave_real), metric(sum_pred, sum_real), metric(var_pred, var_real), metric(std_pred, std_real)
-        pr_cnt, pr_ave, pr_sum, pr_var, pr_std = metric(cnt_ver, cnt_real), metric(ave_ver, ave_real), metric(sum_ver, sum_real), metric(var_ver, var_real), metric(std_ver, std_real)
+        flow_err = get_err(flow_pred, real, metric)
+        verdict_err = get_err(verdict_pred, real[1:], metric)
+        
 
+        # fr_cnt, fr_ave, fr_sum, fr_var, fr_std = metric(cnt_pred, cnt_real), metric(ave_pred, ave_real), metric(sum_pred, sum_real), metric(var_pred, var_real), metric(std_pred, std_real)
+        # pr_cnt, pr_ave, pr_sum, pr_var, pr_std = metric(cnt_ver, cnt_real), metric(ave_ver, ave_real), metric(sum_ver, sum_real), metric(var_ver, var_real), metric(std_ver, std_real)
+
+        sel_real, cnt_real, ave_real, sum_real, var_real, std_real = real
+        fr_sel, fr_cnt, fr_ave, fr_sum, fr_var, fr_std = flow_err
+        pr_cnt, pr_ave, pr_sum, pr_var, pr_std = verdict_err
         logger.info(f'\nquery {idx}:{query} selectivity:{100 * sel_real:.3f}%')
         logger.info("true:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_real, ave_real, sum_real, var_real, std_real))
-        logger.info("fpred:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(cnt_pred, ave_pred, sum_pred, var_pred, std_pred))
-        logger.info("vpred:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(cnt_ver, ave_ver, sum_ver, var_ver, std_ver))
+        # logger.info("fpred:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        #             format(cnt_pred, ave_pred, sum_pred, var_pred, std_pred))
+        # logger.info("vpred:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        #             format(cnt_ver, ave_ver, sum_ver, var_ver, std_ver))
         logger.info("fr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}%".
                     format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std))
         logger.info("vr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}%".

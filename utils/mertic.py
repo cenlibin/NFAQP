@@ -1,5 +1,13 @@
 import numpy as np
 import torch
+
+def mean_err(err_list):
+    return sum(err_list) / len(err_list)
+
+def get_err(pred, real, fn):
+    return [fn(p, r) for (p, r) in zip(pred, real)]
+
+
 def q_error(pred, real):
     """
      @brief Computes the Q error between two tensors. This is used to compute the probability that a prediction is better than a real prediction.
@@ -49,9 +57,9 @@ def relative_error(pred, real):
     pred = np.float32(pred)
     real = np.float32(real)
     if real == 0 and pred != 0:
-        return 1
+        return 100
     if real != 0 and pred == 0:
-        return 1
+        return 100
     if real == 0 and pred == 0:
         return 0
     return 100 * abs(pred - real) / real

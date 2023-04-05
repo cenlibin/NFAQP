@@ -25,42 +25,16 @@ class TableDataset(Dataset):
 
 def get_dataset_from_named(name, dequantilize_type='spline', load_to_device=None, re_dequantilize=False):
     T = TimeTracker()
-    if name in ['lineitem-numetric', 'lineitem-categorical', 'lineitem']:
-        table = load_table(name)
-        T.report_interval_time_ms("Loading table")
-        data, cate_map = discretize_dataset(table)
-        T.report_interval_time_ms("discretizing")
-        data = dequantilize_dataset(name, dequantilize_type, remake=re_dequantilize).to_numpy().astype(np.float32)
-        T.report_interval_time_ms("dequantilize")
-        _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
-        T.report_interval_time_ms("cal mean, std")
-        data = (data - _mean) / (_std + eps)
-    
-    elif 'order' in name:
-        table = load_table(name)
-        T.report_interval_time_ms("Loading table")
-        data, cate_map = discretize_dataset(table)
-        T.report_interval_time_ms("discretizing")
-        data = dequantilize_dataset(name, dequantilize_type, remake=False).to_numpy().astype(np.float32)
-        T.report_interval_time_ms("dequantilize")
-        _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
-        T.report_interval_time_ms("cal mean, std")
-        data = (data - _mean) / (_std + eps)
-    
-    else:
-        try:
-            table = load_table(name)
-        except FileNotFoundError:
-            raise ValueError('No such dataset')
-        T.report_interval_time_ms("Loading table")
-        data, cate_map = discretize_dataset(table)
-        T.report_interval_time_ms("discretizing")
-        data = dequantilize_dataset(name, dequantilize_type, remake=False).to_numpy().astype(np.float32)
-        T.report_interval_time_ms("dequantilize")
-        _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
-        T.report_interval_time_ms("cal mean, std")
-        data = (data - _mean) / (_std + eps)
-    
+    table = load_table(name)
+    T.report_interval_time_ms("Loading table")
+    data, cate_map = discretize_dataset(table)
+    T.report_interval_time_ms("discretizing")
+    data = dequantilize_dataset(name, dequantilize_type, remake=re_dequantilize).to_numpy().astype(np.float32)
+    T.report_interval_time_ms("dequantilize")
+    _mean, _std = data.mean(0).reshape([1, -1]), data.std(0).reshape([1, -1])
+    T.report_interval_time_ms("cal mean, std")
+    data = (data - _mean) / (_std + eps)
+
     T = TimeTracker()
     np.random.shuffle(data)
     T.report_interval_time_ms("shuffle")

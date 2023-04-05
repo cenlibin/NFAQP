@@ -19,9 +19,9 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default="pm25")
+parser.add_argument('--dataset', type=str, default="flights")
 parser.add_argument('--gpu', type=int, default=0)
-parser.add_argument('--model_size', type=str, default='super-tiny')
+parser.add_argument('--model_size', type=str, default='small')
 parser.add_argument('--lr', type=float, default=0.005)
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('--dequan', type=str, default="spline")
@@ -47,7 +47,7 @@ save_interval = -1  # -1 mean not interval save
 eval_interval = 2500
 grad_norm_clip_value = 5.
 batch_size = args.batch_size
-num_training_steps = 500000
+num_training_steps = 300000
 # watch_interval = num_training_steps // 100000
 watch_interval = 100
 device = torch.device(f'cuda:{GPU}')

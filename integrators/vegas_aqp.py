@@ -9,6 +9,10 @@ from .vegas import VEGAS
 from .vegas_mul_map import VEGASMultiMap
 from .vegas_mul_stratification import VEGASMultiStratification
 
+def box_cox(p, lam=0.5):
+    return (p ** lam - 1) / lam if lam != 0 else torch.log(p)
+    
+
 
 class VegasAQP:
     """Vegas Enhanced integration"""
@@ -92,6 +96,8 @@ class VegasAQP:
             # update integrator
             jac = self.map.get_Jac(y)
             jf_vec = f_eval * jac
+            # jf_vec = box_cox(f_eval, 0.9) * jac
+            # jf_vec = (f_eval ** 0.9) * jac
             jf_vec2 = jf_vec ** 2
             jf_vec2 = jf_vec2.detach()
 
@@ -354,7 +360,8 @@ class VegasAQP:
 
             # finish batch eval, update integrator
             jac = self.batch_map.get_Jac(y)
-            jf_vec = batch_f_eval * jac
+            # jf_vec = batch_f_eval * jac
+            jf_vec = (batch_f_eval ** 0.5) * jac
             jf_vec2 = (jf_vec ** 2).detach()
             neval_inverse = 1.0 / nevals.type_as(y)
 

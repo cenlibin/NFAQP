@@ -11,7 +11,7 @@ from table_wapper import TableWrapper
 from utils import q_error, relative_error, sMAPE,seed_everything, OUTPUT_ROOT, get_logger
 
 SEED = 3407
-DATASET_NAME = 'orders'
+DATASET_NAME = 'flights'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'small'
 MODEL_TAG = f'flow-{MODEL_SIZE}'
@@ -39,6 +39,7 @@ def eval():
     logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
+
     table_wapper.print_columns_info()
     query_engine = QueryEngine(
         model,
@@ -55,8 +56,8 @@ def eval():
     metics = []
     for idx in range(N_QUERIES):
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
-        sel_real, cnt_real, ave_real, sum_real, var_real, std_real = table_wapper.query(query)
-        sel_pred, cnt_pred, ave_pred, sum_pred, var_pred, std_pred = query_engine.query(query)
+        sel_real, (cnt_real, ave_real, sum_real, var_real, std_real) = table_wapper.query(query)
+        cnt_pred, ave_pred, sum_pred, var_pred, std_pred = query_engine.query(query)
 
         ms = query_engine.last_qeury_time * 1000
 

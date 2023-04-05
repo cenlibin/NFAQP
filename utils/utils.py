@@ -16,33 +16,42 @@ METADATA_DIR = PROJECT_DIR + '/meta_data.json'
 OUTPUT_ROOT = PROJECT_DIR + '/output'
 
 
-
 def make_flow(config):
     transform = create_transform(config)
     distribution = distributions.StandardNormal((config['num_features'],))
     return flows.Flow(transform, distribution)
 
+
 def load_table(dataset_name, data_dir=None):
     data_path = os.path.join(DATA_PATH if data_dir is None else data_dir, '{}.csv'.format(dataset_name))
     heads = {
-        'lineitem': ['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_shipstruct', 'l_shipmode'],
+        'lineitem': ['l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_shipstruct',
+                     'l_shipmode'],
         'movie_companies': ['id', 'movie_id', 'company_id', 'company_type_id', 'note'],
-        'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk', 'cs_order_number', 'cs_quantity', 'cs_sales_price']
+        'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk', 'cs_order_number', 'cs_quantity', 'cs_sales_price'],
+        'power': ['Global_active_power', 'Global_reactive_power', 'Voltage', 'Global_intensity', 'Sub_metering_1',
+                  'Sub_metering_2', 'Sub_metering_3'],
+        'flights': ["DAY_OF_WEEK", "AIRLINE", "FLIGHT_NUMBER", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", "DEPARTURE_TIME", "DISTANCE", "ARRIVAL_TIME"]
     }
     cate = {
+        'lineitem': ['l_returnflag', 'l_shipstruct', 'l_shipmode'],
         'movie_companies': ['company_type_id'],
         'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk'],
+        'flights': ["AIRLINE", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", ],
+        'power': [],
     }
 
     try:
         head = heads[dataset_name]
     except KeyError:
         head = None
+    sep = '\t' if dataset_name in ['order', 'movie_companies'] else ','
+    data = pd.read_csv(data_path, names=head, sep=sep)
+    data = data.dropna().reset_index(drop=True)
+    # threshold = 1000000
+    # if data.shape[0] > threshold:
+    #     data = data.sample(threshold).reset_index(drop=True)
 
-    if dataset_name in ['order', 'lineitem', 'movie_companies']:
-        data = pd.read_csv(data_path, sep='\t', names=head)
-    else:
-        data = pd.read_csv(data_path, names=head)
     if dataset_name in cate:
         for col in cate[dataset_name]:
             data[col].astype('str')
@@ -53,6 +62,7 @@ def load_table(dataset_name, data_dir=None):
         else:
             data[col].fillna(0)
     return data
+
 
 def clear_json():
     if os.path.exists(METADATA_DIR):
@@ -113,7 +123,6 @@ def get_model_size_mb(model):
     return size_mb * 4 / (1024 * 1024)
 
 
-
 class DataPrefetcher:
     def __init__(self, loader):
         self.loader = iter(loader)
@@ -144,9 +153,9 @@ class DataPrefetcher:
 def make_uniform_sample(dataset_name, sample_rate=0.01):
     full_table = load_table(dataset_name, '/home/clb/AQP/data/backup')
     if dataset_name == 'lineitem':
-        full_table.columns = ['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 
-                            'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag','l_linestatus', 
-                            'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode']
+        full_table.columns = ['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity',
+                              'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus',
+                              'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode']
     output_path = DATA_PATH + f'/{dataset_name}.csv'
     print(f'saving to {output_path}')
     n = full_table.shape[0]
@@ -165,7 +174,6 @@ def get_logger(out_dir, file_name):
     logger.addHandler(fh)
     logger.addHandler(ch)
     return logger
-
 
 
 class HiddenPrints:
@@ -190,3 +198,5 @@ class HiddenPrints:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.activated:
             self.open()
+
+
