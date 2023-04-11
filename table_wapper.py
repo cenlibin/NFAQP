@@ -238,7 +238,7 @@ class TableWrapper:
             num_predicates = self.random_state.randint(1, 4)
 
         num_point = min(self.random_state.randint(0, 3), num_predicates, len(self.categorical_ids))
-        num_range = num_predicates - num_point
+        num_range = min(num_predicates - num_point, len(self.numetric_ids))
 
         target_id = self.random_state.choice(self.numetric_ids, 1)
         qry['target'] = self.get_col_name(target_id)
@@ -310,7 +310,7 @@ class TableWrapper:
         else:
             where = 'WHERE '
             for col, (op, val) in qry['where'].items():
-                col = f'`{col}`'
+                # col = f'`{col}`'
                 if where != 'WHERE ':
                     where += 'AND '
                 if op == '=':
@@ -321,10 +321,10 @@ class TableWrapper:
                 else:
                     where += f'{col} {op} {val} '
         target, gb = qry['target'], qry['gb']
-        target = f'`{target}`'
+        # target = f'`{target}`'
         groupby = f'GROUP BY `{gb}` ' if gb is not None else ''
         sqls = []
-        for agg in ['COUNT', 'AVG', 'SUM', 'VARIANCE', 'STD']:
+        for agg in ['COUNT', 'AVG', 'SUM']:
             sql = f'SELECT {agg}({target}) ' + from_ + where + groupby
             sqls.append(sql)
         return sqls

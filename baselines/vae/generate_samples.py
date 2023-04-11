@@ -7,7 +7,8 @@ from argparse import ArgumentParser
 import os
 import sys
 sys.path.append('/home/clb/AQP')
-DATASET_NAME = 'flights'
+from utils import table_size
+DATASET_NAME = 'lineitem'
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')
@@ -24,7 +25,7 @@ parser.add_argument('--neuron_list', type=int, action='store', default=200,
 parser.add_argument('--epochs', type=int, action='store', default=100)
 parser.add_argument('--log_interval', type=int, action='store', default=25)
 parser.add_argument('--rejection', type=int, action='store', default=1)
-parser.add_argument('--num_samples', type=int, action='store', default=10000)
+parser.add_argument('--num_samples', type=int, action='store', default=57265)
 parser.add_argument('--seed', type=int, action='store', default=42)
 parser.add_argument('--gpus', type=str, action='store', default='0')
 args = parser.parse_args()
@@ -32,7 +33,8 @@ OUT_ROOT = f"/home/clb/AQP/output/VAE-{DATASET_NAME}/"
 args.output_dir = OUT_ROOT
 args.data_output_dir = OUT_ROOT
 args.model_name = 'VAE'
-
+# args.num_samples = int(table_size[DATASET_NAME] * 0.01)
+args.num_samples = 100000
 os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpus)
 
 # Create output dir

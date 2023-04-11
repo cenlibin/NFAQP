@@ -19,9 +19,9 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default="flights")
+parser.add_argument('--dataset', type=str, default="lineitem")
 parser.add_argument('--gpu', type=int, default=0)
-parser.add_argument('--model_size', type=str, default='small')
+parser.add_argument('--model_size', type=str, default='tiny')
 parser.add_argument('--lr', type=float, default=0.005)
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('--dequan', type=str, default="spline")

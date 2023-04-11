@@ -145,7 +145,7 @@ def transform_forward(args, df, num_cols, cat_cols, encoding_type):
 
     # now convert each tuple into this real-valued vector
     np_in = np.zeros((df.shape[0], si)).astype(float)
-    for i, row in tqdm(df.iterrows()):
+    for i, row in tqdm(df.iterrows(), total=df.shape[0]):
         for j in all_columns:
             lb, _, uniques = col_info[j]
             if j in cat_cols:

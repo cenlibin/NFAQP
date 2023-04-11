@@ -25,7 +25,7 @@ def make_flow(config):
 def load_table(dataset_name, data_dir=None):
     data_path = os.path.join(DATA_PATH if data_dir is None else data_dir, '{}.csv'.format(dataset_name))
     heads = {
-        'lineitem': ['l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_shipstruct', 'l_shipmode'],
+        'lineitem': ['l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipinstruct', 'l_shipmode'],
         'movie_companies': ['id', 'movie_id', 'company_id', 'company_type_id', 'note'],
         'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk', 'cs_order_number', 'cs_quantity', 'cs_sales_price'],
         'power': ['Global_active_power', 'Global_reactive_power', 'Voltage', 'Global_intensity', 'Sub_metering_1',
@@ -33,7 +33,7 @@ def load_table(dataset_name, data_dir=None):
         'flights': ["DAY_OF_WEEK", "AIRLINE", "FLIGHT_NUMBER", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", "DEPARTURE_TIME", "DISTANCE", "ARRIVAL_TIME"]
     }
     cate = {
-        'lineitem': ['l_returnflag', 'l_shipstruct', 'l_shipmode'],
+        'lineitem': ['l_returnflag', 'l_shipinstruct', 'l_shipmode', 'l_linestatus'],
         'movie_companies': ['company_type_id'],
         'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk'],
         'flights': ["AIRLINE", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", ],
@@ -165,7 +165,7 @@ def make_uniform_sample(dataset_name, sample_rate=0.01):
 
 
 def get_logger(out_dir, file_name):
-    logger = logging.getLogger('logger')
+    logger = logging.getLogger(f'logger {out_dir} {file_name}')
     logger.setLevel(logging.INFO)
     fh, ch = logging.FileHandler(os.path.join(out_dir, file_name), 'w', encoding='utf-8'), logging.StreamHandler()
     fh.setLevel(logging.INFO)

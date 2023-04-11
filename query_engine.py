@@ -50,7 +50,7 @@ class QueryEngine:
             self.integrator = MonteCarloAQP(
                 self.pdf,
                 n_sample_points=n_sample_points,
-                n_chunks=n_sample_points // 10,
+                n_each_chunks=n_sample_points // 10,
                 device=device
             )
 

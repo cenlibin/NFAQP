@@ -9,7 +9,7 @@ import sys
 sys.path.append('/home/clb/AQP')
 from utils import get_model_size_mb
 DATASET_NAME = 'flights'
-
+ROWS_THRESHOLD = 500000
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')
@@ -19,10 +19,10 @@ parser.add_argument('--data_output_dir', type=str, action='store', default='outp
 parser.add_argument('--batch_size', type=int, action='store', default=256)
 parser.add_argument('--latent_dim', type=int, action='store', default=64)
 parser.add_argument('--neuron_list', type=int, action='store', default=200, help='Latent Dimension size Default: 200.')
-parser.add_argument('--epochs', type=int, action='store', default=100)
+parser.add_argument('--epochs', type=int, action='store', default=300)
 parser.add_argument('--log_interval', type=int, action='store', default=25)
 parser.add_argument('--rejection', type=int, action='store', default=1)
-parser.add_argument('--num_samples', type=int, action='store', default=1000)
+parser.add_argument('--num_samples', type=int, action='store', default=10000)
 parser.add_argument('--seed', type=int, action='store', default=42)
 parser.add_argument('--gpus', type=str, action='store', default='0')
 args = parser.parse_args()
@@ -65,8 +65,8 @@ num_instance = args.num_samples
 print("Reading INPUT File")
 orig_df = load_table(DATASET_NAME)
 orig_df = orig_df.dropna().reset_index(drop=True)
-if orig_df.shape[0] >= 100000:
-    df = orig_df.sample(100000).reset_index(drop=True)
+if orig_df.shape[0] >= ROWS_THRESHOLD:
+    df = orig_df.sample(ROWS_THRESHOLD).reset_index(drop=True)
 else:
     df = orig_df
 print("Original", orig_df.shape)
