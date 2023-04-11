@@ -15,16 +15,16 @@ from utils import *
 from baselines import VerdictEngine, VAEEngine, DeepdbEngine
 from plot import plot_err
 
-METRIC = relative_error                #
+METRIC = sMAPE               #
 SEED = 3407
 DATASET_NAME = 'pm25'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
-REMAKE = True
+REMAKE_VERDICTDB = True
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
-NUM_PREDICATES_RANGE = (1, 4)
+NUM_PREDICATES_RANGE = [1, 6]
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 N_QUERIES = 100
@@ -37,10 +37,11 @@ torch.backends.cudnn.benchmark = True
 torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_available() else 'torch.FloatTensor')
 
 def eval():
-    logger = get_logger(OUT_DIR, 'eval.log')
+    # logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
-    N = table_wapper.data.shape[0]
+    N, dim = table_wapper.data.shape
+    # NUM_PREDICATES_RANGE[1] = dim
     query_engine = QueryEngine(
         model,
         n_sample_points=N_SAMPLE_POINT,
@@ -51,18 +52,18 @@ def eval():
         out_path=OUT_DIR,
         device=DEVICE
     )
-    verdict_engine = VerdictEngine(DATASET_NAME, N, remake=REMAKE)
+    verdict_engine = VerdictEngine(DATASET_NAME, N, remake=REMAKE_VERDICTDB)
     vae_engine = VAEEngine(DATASET_NAME, N, remake=False)
     deepdb_engine = DeepdbEngine(DATASET_NAME, N, remake=False)
 
-    logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
+    print(f"full range integrator is {query_engine.full_domain_integrate()}")
 
     eval_csv = []
     for idx in range(N_QUERIES):
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
         sel, real = table_wapper.query(query)
         n_predicates = len(query['where'])
-        logger.info(f'\nquery {idx}:{query} selectivity:{100 * sel:.3f}%')
+        print(f'\nquery {idx}:{query} selectivity:{100 * sel:.3f}%')
         T = TimeTracker()
         flow_pred = query_engine.query(query)
         t1 = T.report_interval_time_ms(f"flow")
@@ -90,24 +91,24 @@ def eval():
         cnt_deepdb, ave_deepdb, sum_deepdb = deepdb_pred
 
         
-        logger.info("true:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        print("true:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_real, ave_real, sum_real, var_real, std_real))
-        logger.info("flow:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        print("flow:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_flow, ave_flow, sum_flow, var_flow, std_flow))
-        logger.info("verdictdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        print("verdictdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_ver, ave_ver, sum_ver, var_ver, std_ver))
-        logger.info("vae:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        print("vae:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_vae, ave_vae, sum_vae, var_vae, std_vae))
-        logger.info("deepdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} ".
+        print("deepdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} ".
                     format(cnt_deepdb, ave_deepdb, sum_deepdb))
         
-        logger.info("fr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
+        print("fr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
                     format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std, fr_mean))
-        logger.info("vr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
+        print("vr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
                     format(pr_cnt, pr_ave, pr_sum, pr_var, pr_std, pr_mean))
-        logger.info("vae_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f} mean:{:.3f}%%".
+        print("vae_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f} mean:{:.3f}%%".
                     format(vr_cnt, vr_ave, vr_sum, vr_var, vr_std, vr_mean))
-        logger.info("vae_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% mean:{:.3f}%%".
+        print("vae_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% mean:{:.3f}%%".
                     format(dr_cnt, dr_ave, dr_sum, dr_mean))
 
         eval_csv.append([sel, n_predicates,
@@ -125,13 +126,14 @@ def eval():
     
     eval_csv.to_csv(os.path.join(OUT_DIR, 'eval.csv'))
 
-    logger.info("mean\n" + str(eval_csv.mean()) + '\n')
-    logger.info(".5\n" + str(eval_csv.quantile(0.5)) + '\n')
+    print("mean\n" + str(eval_csv.mean()) + '\n')
+    print(".5\n" + str(eval_csv.quantile(0.5)) + '\n')
 
-#     logger.info(".95", metics.quantile(0.95), '\n')
-#     logger.info(".99", metics.quantile(0.99), '\n')
-#     logger.info("max", metics.max(), '\n')
+#     print(".95", metics.quantile(0.95), '\n')
+#     print(".99", metics.quantile(0.99), '\n')
+#     print("max", metics.max(), '\n')
 
     plot_err(DATASET_NAME, eval_csv)
 if __name__ == '__main__':
+
     eval()

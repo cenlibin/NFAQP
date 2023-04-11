@@ -10,7 +10,7 @@ from utils import *
 SOURCE_DB = 'AQP'
 TARGET_DB = 'verdictdb'
 SAMPLE_RATE = 0.01
-THRESH_HOLD = 100000
+THRESH_HOLD = 10000
 # VAE 
 
 
@@ -33,7 +33,8 @@ class VerdictEngine:
         self.verdict_conn = pyverdict.VerdictContext(connect_string)
         self.dataset = dataset_name
         self.N = table_N
-        self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
+        # self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
+        self.sample_rate = THRESH_HOLD / self.N
         if remake:
             self.generate_sample(dataset_name)
 

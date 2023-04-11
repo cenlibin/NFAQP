@@ -30,13 +30,15 @@ def load_table(dataset_name, data_dir=None):
         'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk', 'cs_order_number', 'cs_quantity', 'cs_sales_price'],
         'power': ['Global_active_power', 'Global_reactive_power', 'Voltage', 'Global_intensity', 'Sub_metering_1',
                   'Sub_metering_2', 'Sub_metering_3'],
-        'flights': ["DAY_OF_WEEK", "AIRLINE", "FLIGHT_NUMBER", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", "DEPARTURE_TIME", "DISTANCE", "ARRIVAL_TIME"]
+        'flights': ["DAY_OF_WEEK", "AIRLINE", "FLIGHT_NUMBER", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", "DEPARTURE_TIME", "DISTANCE", "ARRIVAL_TIME"],
+        'housing': ['followers', 'totalPrice', 'price', 'square', 'livingRoom', 'drawingRoom', 'kitchen', 'bathRoom', 'floor', 'buildingType', 'buildingStructure', 'elevator']
     }
     cate = {
         'lineitem': ['l_returnflag', 'l_shipinstruct', 'l_shipmode', 'l_linestatus'],
         'movie_companies': ['company_type_id'],
         'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk'],
         'flights': ["AIRLINE", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", ],
+        'housing': ['floor', 'buildingType', 'buildingStructure', 'elevator'],
         'power': [],
     }
 
