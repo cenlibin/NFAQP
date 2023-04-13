@@ -10,7 +10,7 @@ from utils import *
 SOURCE_DB = 'AQP'
 TARGET_DB = 'verdictdb'
 SAMPLE_RATE = 0.01
-THRESH_HOLD = 10000
+THRESH_HOLD = 1e9
 # VAE 
 
 
@@ -33,8 +33,10 @@ class VerdictEngine:
         self.verdict_conn = pyverdict.VerdictContext(connect_string)
         self.dataset = dataset_name
         self.N = table_N
-        # self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
-        self.sample_rate = THRESH_HOLD / self.N
+        self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
+        if dataset_name == 'lineitem':
+            self.sample_rate = 0.008
+        # self.sample_rate = THRESH_HOLD / self.N
         if remake:
             self.generate_sample(dataset_name)
 
@@ -88,6 +90,8 @@ class VAEEngine:
         N_SAMPLE = 100000
         # N_SAMPLE = int(table_size[dataset_name] * 0.01)
         self.df = pd.read_csv(f"/home/clb/AQP/output/VAE-{dataset_name}/samples_{N_SAMPLE}.csv")
+        self.N_SAMPLE = N_SAMPLE
+        self.dataset_name = dataset_name
         self.N = table_N
 
     def query(self, query):
@@ -98,6 +102,7 @@ class VAEEngine:
             '<=': np.less_equal,
             '=': np.equal,
         }
+        self.df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
         predicates, target_col = query['where'], query['target']
         data_np = self.df.to_numpy()
         col_id = {col:id for id, col in enumerate(self.df.columns)}
@@ -149,6 +154,7 @@ class DeepdbEngine:
             'pm25': gen_pm25_schema,
             'flights': gen_flights_schema,
             'lineitem': gen_lineitem_schema,
+            'housing': gen_housing_schema,
         }
         self.schema = schemas[dataset_name](data_path)
         self.schema.tables[0].table_size = table_N

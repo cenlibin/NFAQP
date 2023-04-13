@@ -16,19 +16,19 @@ from baselines import VerdictEngine, VAEEngine, DeepdbEngine
 from plot import plot_err
 
 METRIC = sMAPE               #
-SEED = 3407
+SEED = 42332
 DATASET_NAME = 'pm25'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
-REMAKE_VERDICTDB = True
+REMAKE_VERDICTDB = False
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
-
-NUM_PREDICATES_RANGE = [1, 6]
+N_QUERIES = 200
+NUM_PREDICATES_RANGE = [1, 8]
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
-N_QUERIES = 100
-N_SAMPLE_POINT = 16000 
+
+N_SAMPLE_POINT = 16000
 MAX_ITERATION = 1
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
@@ -37,11 +37,14 @@ torch.backends.cudnn.benchmark = True
 torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_available() else 'torch.FloatTensor')
 
 def eval():
+    gap = 200
     # logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     N, dim = table_wapper.data.shape
-    # NUM_PREDICATES_RANGE[1] = dim
+    N_QUERIES = dim * gap
+    NUM_PREDICATES_RANGE[1] = dim
+    print("n_predicates_range ", NUM_PREDICATES_RANGE)
     query_engine = QueryEngine(
         model,
         n_sample_points=N_SAMPLE_POINT,
@@ -60,10 +63,13 @@ def eval():
 
     eval_csv = []
     for idx in range(N_QUERIES):
+        n_p = idx // gap + 1
+        NUM_PREDICATES_RANGE[0] = n_p
+        NUM_PREDICATES_RANGE[1] = n_p
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
         sel, real = table_wapper.query(query)
         n_predicates = len(query['where'])
-        print(f'\nquery {idx}:{query} selectivity:{100 * sel:.3f}%')
+        print(f'\nquery {idx}:{query} selectivity:{100 * sel:.3f}% n_predicates:{n_predicates}')
         T = TimeTracker()
         flow_pred = query_engine.query(query)
         t1 = T.report_interval_time_ms(f"flow")
@@ -102,13 +108,13 @@ def eval():
         print("deepdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} ".
                     format(cnt_deepdb, ave_deepdb, sum_deepdb))
         
-        print("fr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
+        print("flow_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
                     format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std, fr_mean))
-        print("vr_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
+        print("verdictdb_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
                     format(pr_cnt, pr_ave, pr_sum, pr_var, pr_std, pr_mean))
         print("vae_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f} mean:{:.3f}%%".
                     format(vr_cnt, vr_ave, vr_sum, vr_var, vr_std, vr_mean))
-        print("vae_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% mean:{:.3f}%%".
+        print("deepdb_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% mean:{:.3f}%%".
                     format(dr_cnt, dr_ave, dr_sum, dr_mean))
 
         eval_csv.append([sel, n_predicates,

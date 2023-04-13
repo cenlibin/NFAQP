@@ -8,7 +8,7 @@ import os
 import sys
 sys.path.append('/home/clb/AQP')
 from utils import table_size
-DATASET_NAME = 'lineitem'
+DATASET_NAME = 'flights'
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')

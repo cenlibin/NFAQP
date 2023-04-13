@@ -25,8 +25,7 @@ def plot_err(dataset, df):
     width = 12
     ratio = 0.2
     fig = plt.figure(figsize=(width, int(width * ratio)))
-    sns.set_style("ticks")
-    sns.set(font="Times New Roman")
+    sns.set(font="Times New Roman", style='white')
     ax = sns.boxplot(x="Methods", y="sMAPE",
                     hue="Aggregation Functions", showfliers=False, palette="Paired",
                     data=plot_df)

@@ -235,7 +235,7 @@ class TableWrapper:
         if num_predicates_ranges is not None:
             num_predicates = self.random_state.randint(num_predicates_ranges[0], num_predicates_ranges[1] + 1)
         else:
-            num_predicates = self.random_state.randint(1, 4)
+            num_predicates = self.random_state.randint(1, len(self.categorical_cols) + 1)
 
         num_point = min(self.random_state.randint(0, 3), num_predicates, len(self.categorical_ids))
         num_range = min(num_predicates - num_point, len(self.numetric_ids))
@@ -285,6 +285,7 @@ class TableWrapper:
             val = tuple0[id]
             qry['where'][col] = (op, val)
         if not self.is_query_legal(qry):
+            print('no legal for ', qry, '\n\n\n')
             qry = self.generate_query(gb, num_predicates_ranges)
         for sql in self.get_qry_sql(qry):
             self.query_sql.write(sql + ';\n')

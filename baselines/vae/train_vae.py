@@ -8,7 +8,7 @@ import os
 import sys
 sys.path.append('/home/clb/AQP')
 from utils import get_model_size_mb
-DATASET_NAME = 'flights'
+DATASET_NAME = 'pm25'
 ROWS_THRESHOLD = 500000
 
 parser = ArgumentParser(description='VAE')
@@ -17,7 +17,7 @@ parser.add_argument('--input_file', type=str, action='store', default=f'/home/cl
 parser.add_argument('--output_dir', type=str, action='store', default='outputs/{}/'.format('vae-orders'))
 parser.add_argument('--data_output_dir', type=str, action='store', default='outputs/{}/'.format('vae-orders'))
 parser.add_argument('--batch_size', type=int, action='store', default=256)
-parser.add_argument('--latent_dim', type=int, action='store', default=64)
+parser.add_argument('--latent_dim', type=int, action='store', default=256)
 parser.add_argument('--neuron_list', type=int, action='store', default=200, help='Latent Dimension size Default: 200.')
 parser.add_argument('--epochs', type=int, action='store', default=300)
 parser.add_argument('--log_interval', type=int, action='store', default=25)
