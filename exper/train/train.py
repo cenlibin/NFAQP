@@ -19,7 +19,7 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default="housing")
+parser.add_argument('--dataset', type=str, default="lineitemext")
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--model_size', type=str, default='tiny')
 parser.add_argument('--lr', type=float, default=0.005)

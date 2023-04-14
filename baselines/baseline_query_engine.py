@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 sys.path.append('/home/clb/AQP')
 from utils import *
-
+from copy import deepcopy
 # verdict const parameter
 SOURCE_DB = 'AQP'
 TARGET_DB = 'verdictdb'
@@ -31,6 +31,7 @@ class VerdictEngine:
             autocommit=True
         ).cursor()
         self.verdict_conn = pyverdict.VerdictContext(connect_string)
+        # self.verdict_conn = pyverdict.mysql_context(host='localhost', user='root', password=password)
         self.dataset = dataset_name
         self.N = table_N
         self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
@@ -41,6 +42,8 @@ class VerdictEngine:
             self.generate_sample(dataset_name)
 
     def query(self, query):
+    
+
         with HiddenPrints():
             target, gb = query['target'], query['gb']
             target = f'`{target}`'
@@ -57,7 +60,7 @@ class VerdictEngine:
                     where += f'{col} {op} {val} '
 
             pred = []
-            for agg in ['COUNT', 'AVG', 'SUM']:
+            for agg in ['COUNT', 'AVG', 'SUM', 'VARIANCE', 'STDDEV']:
                 sql = f'SELECT {agg}({target}) FROM {TARGET_DB}.{self.dataset} {where}'
                 verdict_pred = self.verdict_conn.sql(sql).to_numpy().item()
                 verdict_pred = float(verdict_pred if verdict_pred is not None else 0)
@@ -66,11 +69,47 @@ class VerdictEngine:
                 #     pred.append(verdict_pred / self.N)  # sel
                 pred.append(verdict_pred)
 
-            p_std = self.verdict_conn.sql(f'SELECT STDDEV({target}) FROM {TARGET_DB}.{self.dataset} {where}').to_numpy().item()
-            p_std = float(p_std if p_std is not None else 0)
-            p_var = p_std ** 2
-            pred = pred + [p_var, p_std]
+            # p_std = self.verdict_conn.sql(f'SELECT STDDEV({target}) FROM {TARGET_DB}.{self.dataset} {where}').to_numpy().item()
+            # p_std = float(p_std if p_std is not None else 0)
+            # p_var = p_std ** 2
+            # pred = pred + [p_var, p_std]
             return pred
+    
+    def gb_query(self, query):
+
+        with HiddenPrints():
+            res = {}
+            target, gb = query['target'], query['gb']
+            target = f'{target}'
+            # gb = f'{gb}'
+            where = '' if len(query['where']) == 0 else 'WHERE '
+            for col, (op, val) in query['where'].items():
+                # col = f'`{col}`'
+                if where != 'WHERE ':
+                    where += "AND "
+                if op == '=':
+                    val = f'\'{val}\''
+                if op == 'between':
+                    where += f'{col} BETWEEN {val[0]} AND {val[1]} '
+                else:
+                    where += f'{col} {op} {val} '
+
+            for agg in ['COUNT', 'AVG', 'SUM', 'VARIANCE','STDDEV']:
+                sql = f'SELECT {gb}, {agg}({target}) FROM {TARGET_DB}.{self.dataset} {where}GROUP BY {gb}'
+                # mysql_pred = self.mysql_conn.execute(sql)
+                verdict_pred = self.verdict_conn.sql(sql)
+                # my = self.mysql_conn.execute(sql)
+                verdict_pred = verdict_pred.to_numpy()
+                for line in verdict_pred:
+                    gb_val, agg_val = line[0], line[1]
+                    agg_val = float(agg_val if agg_val is not None else 0)
+                    agg_val /= (self.sample_rate if agg in ['COUNT', 'SUM'] else 1.0)
+                    if gb_val not in res:
+                        res[gb_val] = [agg_val]
+                    else:
+                        res[gb_val].append(agg_val)
+
+                return res
 
 
     def generate_sample(self, dataset_name):
@@ -84,6 +123,7 @@ class VerdictEngine:
         self.verdict_conn.sql(sql)
         T.report_interval_time_sec(sql)
 
+    
 
 class VAEEngine:
     def __init__(self, dataset_name, table_N, remake=False):
@@ -93,8 +133,10 @@ class VAEEngine:
         self.N_SAMPLE = N_SAMPLE
         self.dataset_name = dataset_name
         self.N = table_N
+        self.df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
+        
 
-    def query(self, query):
+    def query(self, query, df=None):
         OPS = {
             '>': np.greater,
             '<': np.less,
@@ -102,13 +144,16 @@ class VAEEngine:
             '<=': np.less_equal,
             '=': np.equal,
         }
-        self.df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
+        if df is None:
+            df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
+        
+        
         predicates, target_col = query['where'], query['target']
-        data_np = self.df.to_numpy()
+        data_np = df.to_numpy()
         col_id = {col:id for id, col in enumerate(self.df.columns)}
         target_col_idx = col_id[target_col]
         # target_col_idx = self.get_col_id(target_col)
-        mask = np.ones(len(self.df)).astype(np.bool_)
+        mask = np.ones(len(df)).astype(np.bool_)
         # Returns a mask of the data for each column.
         for col in self.df.columns:
             # Skips the first predicate in the predicates.
@@ -136,6 +181,22 @@ class VAEEngine:
         std = filted_data.std()
         return count, ave, sum, var, std
 
+    def gb_query(self, query):
+        results = {}
+        gb_col = query['gb']
+        for gb_val, df in self.df.groupby(gb_col):
+        
+            sub_query = {
+                "where": deepcopy(query['where']),
+                "target": query['target'],
+                'gb': None
+            }
+            sub_query['where'][gb_col] = ['=', gb_val]
+            (count, ave, sum, var, std) = self.query(sub_query)
+            if count > 0:
+                results[gb_val] = (count, ave, sum, var, std)
+        return results
+
     def generate_sample(self, dataset_name):
         pass
 
@@ -149,7 +210,7 @@ class DeepdbEngine:
         self.root = f'/home/clb/AQP/output/deepdb-{dataset_name}/'
         data_path = f'/home/clb/AQP/data/{dataset_name}'
         self.dataset = dataset_name
-        self.ensemble = read_ensemble([self.root + 'ensemble.pkl'])
+        self.ensemble = read_ensemble([self.root + 'ensemble.pkl'], build_reverse_dict=True)
         schemas = {
             'pm25': gen_pm25_schema,
             'flights': gen_flights_schema,
@@ -201,3 +262,52 @@ class DeepdbEngine:
                                                         confidence_intervals=show_confidence_intervals)
                 pred.append(p)
             return pred
+    
+    def gb_query(self, query):
+        with HiddenPrints():
+            result = {}
+
+            rdc_spn_selection = False
+            pairwise_rdc_path = None
+            merge_indicator_exp = True
+            max_variants = 1
+            exploit_overlapping = True
+            debug = False
+            show_confidence_intervals = False
+
+            target, gb = query['target'], query['gb']
+            # target = f'`{target}`'
+            where = '' if len(query['where']) == 0 else 'WHERE '
+            for col, (op, val) in query['where'].items():
+                # col = f'`{col}`'
+                if where != 'WHERE ':
+                    where += "AND "
+                if op == '=':
+                    val = f'\'{val}\''
+                if op == 'between':
+                    where += f'{col} BETWEEN {val[0]} AND {val[1]} '
+                else:
+                    where += f'{col} {op} {val} '
+
+
+            for agg in ['COUNT', 'AVG', 'SUM']:
+
+                sql = f'SELECT {agg}({target}) FROM {self.dataset} {where}group by {gb}'
+
+                qry = parse_query(sql.strip(), self.schema)
+                _, p = self.ensemble.evaluate_query(qry, rdc_spn_selection=rdc_spn_selection,
+                                                        pairwise_rdc_path=pairwise_rdc_path,
+                                                        merge_indicator_exp=merge_indicator_exp,
+                                                        max_variants=max_variants,
+                                                        exploit_overlapping=exploit_overlapping,
+                                                        debug=debug,
+                                                        confidence_intervals=show_confidence_intervals)
+                for line in p:
+                    gb_val, agg_val = line
+                    if gb_val not in result:
+                        result[gb_val] = [agg_val]
+                    else:
+                        result[gb_val].append(agg_val)
+
+
+            return result

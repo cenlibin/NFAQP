@@ -69,13 +69,6 @@ class QueryEngine:
             )
 
     def get_normalized_val(self, col_id, val, norm_type='meanstd'):
-        """
-         @brief Normalize a value to a specified type. This is useful for calculating mean std or min / max of a column
-         @param col_id column to normalize ( int )
-         @param val value to normalize ( float ) ( int )
-         @param norm_type type of normalization ( meanstd min or minmax )
-         @return normalized value ( float ) ( int or float ) Normalized value ( float ) ( int or float
-        """
         if norm_type == 'meanstd':
             return (val - self.Means[col_id]) / (self.Stds[col_id] + eps)
         elif norm_type == 'minmax':
@@ -88,12 +81,6 @@ class QueryEngine:
             return norm_val
 
     def get_query_range(self, predicates):
-        """
-         @brief Get legal and actual range for an aqp query based on predicate. This is used to determine the range of a QP query that should be used in order to perform the operation.
-         @param predicates dictionary of column name and predicate. For example {'column_name': ('>'' <') }
-         @return a tuple of two lists. The first list contains the legal range and the second list contains the actual
-        """
-        """get legal range and actual range for an aqp query"""
         legal_range, actual_range = [[0., 1.]] * len(self.columns), [[0., 1.]] * len(self.columns)
         # Returns a list of range values for each column.
         for col_name in self.columns:
@@ -175,7 +162,7 @@ class QueryEngine:
         count = sel * self.n
         sum = ave * count
         std = var.sqrt()
-        pred = torch.stack([sel, count, ave, sum, var, std], dim=0).permute(1, 0).cpu()
+        pred = torch.stack([count, ave, sum, var, std], dim=0).permute(1, 0).cpu()
         self._time_stop()
         return pred
 
@@ -198,7 +185,7 @@ class QueryEngine:
         gb_chunks = (gb_chunks - gb_mean) / (gb_std + eps)
 
         # query for small batch 
-        results = torch.empty([gb_dist_size, 6])
+        results = torch.empty([gb_dist_size, 5])
         batch_start = 0
         if batch_size > gb_dist_size:
             batch_size = gb_dist_size
@@ -206,8 +193,7 @@ class QueryEngine:
             if batch_start + batch_size > gb_dist_size:
                 batch_size = gb_dist_size - batch_start
 
-            batch_chunk = gb_chunks[
-                          batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
+            batch_chunk = gb_chunks[batch_start: batch_start + batch_size + 1]  # first dim is (batch + 1) for a batch query
 
             sel, ave, var = self.integrator.gb_integrate(
                 legal_range,
@@ -221,16 +207,17 @@ class QueryEngine:
             sum = ave * count
             std = var.sqrt()
 
-            batch_result = torch.stack([sel, count, ave, sum, var, std], dim=1)
+            batch_result = torch.stack([count, ave, sum, var, std], dim=1)
 
             results[batch_start: batch_start + batch_size, :] = batch_result
             batch_start += batch_size
 
         results = results.cpu().numpy()
+        results = {gb_val: list(pred) for gb_val, pred in zip(gb_dist_vals, results)}
 
         self._time_stop()
 
-        return gb_dist_vals, results
+        return results
 
     def gb_serial(self, query):
         self._time_start()

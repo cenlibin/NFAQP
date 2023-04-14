@@ -9,23 +9,24 @@ import torch
 import logging
 from query_engine import QueryEngine
 from table_wapper import TableWrapper
-from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, groupby_relative_error, get_logger
+from utils import q_error, relative_error, seed_everything, OUTPUT_ROOT, groupby_error, get_logger
 import numpy as np
-
+from baselines import VerdictEngine, VAEEngine, DeepdbEngine
 SEED = 8889
-DATASET_NAME = 'orders'
+DATASET_NAME = 'lineitem'
 DEQUAN_TYPE = 'spline'
-MODEL_SIZE = 'middle'
+MODEL_SIZE = 'tiny'
 
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
-N_QUERIES = 100
+N_QUERIES = 10
 N_SAMPLE_POINT = 16000
-MAX_ITERATION = 4
-GROUPBY_BATCH_SIZE = 600
+MAX_ITERATION = 1
+NUMBER_OF_PREDICATE = [1, 5]
+GROUPBY_BATCH_SIZE = 50
 DEVICE = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 seed_everything(SEED)
 torch.backends.cudnn.deterministic = False
@@ -47,35 +48,30 @@ def eval():
         out_path=OUT_DIR,
         device=DEVICE
     )
-    logger.info(f"full range integrator is {query_engine.full_domain_integrate()}")
+    verdict_engine = VerdictEngine(DATASET_NAME, N, remake=REMAKE_VERDICTDB)
+    vae_engine = VAEEngine(DATASET_NAME, N, remake=False)
+    deepdb_engine = DeepdbEngine(DATASET_NAME, N, remake=False) 
+
+    print(f"full range integrator is {query_engine.full_domain_integrate()}")
     for i in range(N_QUERIES):
         
         query = table_wapper.generate_query(gb=True)
         logger.info(table_wapper.get_qry_sql(query)[0])
         T = TimeTracker()
-        index, reals = table_wapper.query(query)
+        reals = table_wapper.query(query)
         t0 = T.report_interval_time_ms('real query')
-        with torch.no_grad():
-            index, preds = query_engine.gb_query(query, batch_size=GROUPBY_BATCH_SIZE)
-            t1 = T.report_interval_time_ms("batch query")
-            # series_index, series_preds = query_engine.gb_serial(query)
-            # t2 = T.report_interval_time_ms("serial query")
+        flow_preds = query_engine.gb_query(query, batch_size=GROUPBY_BATCH_SIZE)
+        t1 = T.report_interval_time_ms("batch query")
+
         
-        logger.info(f'real group by tooks {t0:.3f} ms, {t0 / len(index):.3f} ms per query')
-        logger.info(f'batch group by tooks {t1:.3f} ms, {t1 / len(index):.3f} ms per query')
+        logger.info(f'real group by tooks {t0:.3f} ms, {t0 / len(reals):.3f} ms per query')
+        logger.info(f'batch group by tooks {t1:.3f} ms, {t1 / len(flow_preds):.3f} ms per query')
         # logger.info(f'series group by tooks {t2:.3f} ms, {t2 / len(index):.3f} ms per query')
         logger.info(f'aqp speed up {t0 / t1:.3f}x  | ')
-        rerr = groupby_relative_error(preds, reals)
+        rerr = groupby_error(flow_preds, reals)
 
-        for gb_on, pred, real in zip(index, preds, reals):
-            s = f"{gb_on}: "
-            for agg, p, r in zip(["sel", "count", "ave", "sum", "std", "var"],  pred, real):
-                s += f'\n|{agg}: {p:.3f}/{r:.3f}({relative_error(p, r):.3f}%)| '
-            logger.info(s)
+        print(rerr)
 
-        break 
-
-        pass
 
 
 if __name__ == '__main__':

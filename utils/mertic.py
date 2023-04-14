@@ -78,20 +78,23 @@ def batch_relative_error(pred, real):
     return err
 
 
-def groupby_relative_error(pred, real, eps=1e-9):
-    assert pred.shape == real.shape
-    pred, real = pred[:, 1:], real[:, 1:]
-    err = np.abs(pred - real)
-    rerr = err / (real + eps)
-    return rerr
-
-
 
 def sMAPE(pred, real):
     """ bounded relative error """
     return 2 * abs(pred - real) / (abs(pred) + abs(real))
 
+def groupby_error(pred, real, eps=1e-9, metic=sMAPE):
+    errs = np.zeros([len(real), 5])
+    for i, k in enumerate(real.keys()):
+        if k not in pred:
+            errs[i] = np.ones(5) * 2.0
+            continue
+        for j, (p, r) in enumerate(zip(pred[k], real[k])):
+            err = metic(p, r)
+            errs[i, j] = err
+    errs = errs.mean(0)
 
+    return list(errs)
 def log_metric(m):
     s = ''
     for c in m.index:

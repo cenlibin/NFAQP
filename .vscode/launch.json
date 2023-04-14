@@ -8,15 +8,23 @@
             "name": "eval_gb.py",
             "type": "python",
             "request": "launch",
-            "program": "exper/eval_gb.py",
+            "program": "exper/eval/eval_gb.py",
             "console": "integratedTerminal",
             "justMyCode": true
         },
         {
-            "name": "eval.py",
+            "name": "eval-gb-all.py",
             "type": "python",
             "request": "launch",
-            "program": "exper/eval.py",
+            "program": "exper/eval/eval-groupby-all.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "eval-all.py",
+            "type": "python",
+            "request": "launch",
+            "program": "exper/eval/eval-all.py",
             "console": "integratedTerminal",
             "justMyCode": true
         },

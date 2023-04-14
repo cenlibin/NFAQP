@@ -17,13 +17,6 @@ OPS = {
 
 class TableWrapper:
     def __init__(self, dataset_name, out_path, dequan_type='spline', seed=45, read_meta=False):
-        """
-         @brief Initialize the discretization and dequantization of the dataset. This is the function that is called by the constructor
-         @param dataset_name name of the dataset to be discretized
-         @param out_path path to the output directory
-         @param seed seed for random number generator ( default 45 )
-         @param read_meta read metadata ( default False ) if True the meta will be
-        """
         tracker = TimeTracker()
         self.seed = seed
         self.random_state = np.random.RandomState(self.seed)
@@ -67,9 +60,6 @@ class TableWrapper:
         return s
 
     def create_meta_data(self):
-        """
-         @brief Save meta data to file for use by : py : meth : ` read `. This is useful when you want to re - use the object
-        """
         eps = 1e-05
         self.Means = self.data_dq.mean(axis=0)
         self.Stds = self.data_dq.std(axis=0) + eps
@@ -96,9 +86,6 @@ class TableWrapper:
             pickle.dump(meta_data, f)
 
     def read_meta_data(self):
-        """
-         @brief Read meta data from file and store in class variables. This is called after the object is created and before any objects are added
-        """
         with open(self.meta_path, 'rb') as f:
             meta_data = pickle.load(f)
         self.columns = meta_data['columns']
@@ -115,29 +102,13 @@ class TableWrapper:
         self.is_numetric_col = meta_data['is_numetric_col']
 
     def get_col_id(self, col):
-        """
-         @brief Get the ID of the column. This is useful for determining which columns are in the table and which need to be recalculated when they are added to the result set
-         @param col Column name or index.
-         @return ID of the column or None if not found ( no error is raised ). Note that col may be a string
-        """
+
         return self.col2id[col] if isinstance(col, str) else col
 
     def get_col_name(self, id):
-        """
-             Get the name of a column. This is useful for debugging and to avoid having to re - use the same object every time it is used.
-             @param id - The id of the column to get the name of.
-             @return The name of the column with the given id or None if no such column exists
-            """
         return self.columns[int(id)]
 
     def get_normalized_value(self, col_id, val, norm_type='meanstd'):
-        """
-         @brief Normalize and return a value. This is a convenience function for normalizing a value to a given mean standard deviation or min / max of the data
-         @param col_id column to normalize ( must be in self. Means self. Stds )
-         @param val value to normalize ( must be in self. Stds self. Mins self. Maxs )
-         @param norm_type type of normalization to use ( meanstd or minmax )
-         @return value normalized to the range [ 0 1 ] or raises an exception if normalization is not supported ( default : meanstd
-        """
         # Returns the normalized value of the column.
         if norm_type == 'meanstd':
             return (val - self.Means[col_id]) / self.Stds[col_id]
@@ -148,11 +119,6 @@ class TableWrapper:
             raise TypeError('unsupported normalized type')
 
     def get_query_range(self, query):
-        """
-         @brief Get the legal and actual range for an aqp query. This is a helper to make it easier to use when you want to know where a query is in the database
-         @param query query as returned by self. getQuery
-         @return a tuple of two lists : ( lower bound upper bound
-        """
         """get legal range and actual range for an aqp query"""
         legal_range, actual_range = [[0., 1.]] * len(self.columns), [[0., 1.]] * len(self.columns)
         # Returns a list of range values for each column in the query.
@@ -185,10 +151,7 @@ class TableWrapper:
         return torch.FloatTensor(legal_range), torch.FloatTensor(actual_range)
 
     def get_full_query_range(self):
-        """
-         @brief Returns legal and actual range for all columns. This is used to determine the range of the query to be executed.
-         @return tuple of two lists : 1st list is legal range 2nd list is actual range ( inclusive )
-        """
+
         legal_range, actual_range = [[0., 1.]] * len(self.columns), [[0., 1.]] * len(self.columns)
         # This method is used to calculate the range of the columns in the table.
         for col_name in self.columns:
@@ -200,11 +163,6 @@ class TableWrapper:
         return torch.FloatTensor(legal_range), torch.FloatTensor(actual_range)
 
     def get_legal_range_N_query(self, queries):
-        """
-         @brief Get the Legal Range for N queries. This is a list of N queries that are legal ranges
-         @param queries A list of queries to get the Legal Range for
-         @return A list of N legal ranges for each query in the queries list. Each legal range is a Range object
-        """
         """ legal ranges for N queries """
         legal_lists = []
         # Add a range of legal lists to the list of legal lists.
@@ -214,10 +172,6 @@ class TableWrapper:
 
     @staticmethod
     def generate_full_query():
-        """
-         @brief Generates a full query that can be used to retrieve data. This is a helper function for L { generateQuery } and should be used in conjunction with L { query } when you don't need to query the database.
-         @return A dictionary containing the query to be used for the search and the column to be selected by the user
-        """
         qry = {
             "where": {},
             "col": 1,
@@ -331,22 +285,11 @@ class TableWrapper:
         return sqls
 
     def generate_N_query(self, n):
-        """
-         @brief Generate N queries for AQP. This is a wrapper around generateAQPQuery to allow a user to specify a number of queries to be generated
-         @param n The number of queries to generate
-         @param rng The random number generator to use. If None the one created by self. random_state will be used
-         @return A list of queries for AQP ( n ) or an empty list if there are no queries
-        """
-        """ generate N queries """
         # Set the random state of the generator.
         return [self.generate_query() for i in range(n)]
 
     def query(self, query):
-        """
-         @brief Query the data to get the statistics. This is a function that takes a query and returns a tuple of the following : count average variance std
-         @return A tuple of the following : count averaged variance std ( in case of outliers ) A boolean array of True if the query was
-        """
-        """ get true count, ave, sum for a query """
+    
 
         if query['gb'] is not None:
             return self.gb_query(query)
@@ -380,7 +323,7 @@ class TableWrapper:
     def gb_query(self, query):
         gb_col = query['gb']
         gb_distinct_vals = self.categorical_mapping[gb_col]['id2cate']
-        results = []
+        results = {}
         for gb_val in tqdm(gb_distinct_vals):
             sub_query = {
                 "where": deepcopy(query['where']),
@@ -388,9 +331,10 @@ class TableWrapper:
                 'gb': None
             }
             sub_query['where'][gb_col] = ['=', gb_val]
-            results.append(self.query(sub_query))
-        results = np.array(results)
-        return gb_distinct_vals, results
+            sel, (count, ave, sum, var, std) = self.query(sub_query)
+            if count > 0:
+                results[gb_val] = (count, ave, sum, var, std)
+        return results
 
     def __del__(self):
         self.query_sql.close()

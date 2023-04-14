@@ -26,6 +26,7 @@ def load_table(dataset_name, data_dir=None):
     data_path = os.path.join(DATA_PATH if data_dir is None else data_dir, '{}.csv'.format(dataset_name))
     heads = {
         'lineitem': ['l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipinstruct', 'l_shipmode'],
+        'lineitemext': ['L_LINENUMBER', 'L_QUANTITY', 'L_EXTENDEDPRICE', 'L_DISCOUNT', 'L_TAX', 'L_RETURNFLAG', 'L_LINESTATUS', 'L_SHIPINSTRUCT', 'L_SHIPMODE'],
         'movie_companies': ['id', 'movie_id', 'company_id', 'company_type_id', 'note'],
         'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk', 'cs_order_number', 'cs_quantity', 'cs_sales_price'],
         'power': ['Global_active_power', 'Global_reactive_power', 'Voltage', 'Global_intensity', 'Sub_metering_1',
@@ -35,6 +36,7 @@ def load_table(dataset_name, data_dir=None):
     }
     cate = {
         'lineitem': ['l_returnflag', 'l_shipinstruct', 'l_shipmode', 'l_linestatus'],
+        'lineitemext': ['L_LINENUMBER', 'L_RETURNFLAG', 'L_LINESTATUS', 'L_SHIPINSTRUCT', 'L_SHIPMODE'],
         'movie_companies': ['company_type_id'],
         'catalog_sales': ['cs_warehouse_sk', 'cs_item_sk'],
         'flights': ["AIRLINE", "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", ],
