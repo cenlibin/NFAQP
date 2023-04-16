@@ -8,12 +8,13 @@ class TimeTracker:
     def reset(self):
         self._st = time()
 
-    def report_interval_time_ms(self, msg=''):
+    def report_interval_time_ms(self, msg='', print=False):
         et = time()
         t = et - self._st
         t *= 1000
         self._st = et
-        print('{}:{:.4f} ms'.format(msg, t))
+        if print:
+            print('{}:{:.4f} ms'.format(msg, t))
         return t
 
     def report_interval_time_sec(self, msg=''):

@@ -324,16 +324,49 @@ class TableWrapper:
         gb_col = query['gb']
         gb_distinct_vals = self.categorical_mapping[gb_col]['id2cate']
         results = {}
-        for gb_val in tqdm(gb_distinct_vals):
-            sub_query = {
-                "where": deepcopy(query['where']),
-                "target": query['target'],
-                'gb': None
-            }
-            sub_query['where'][gb_col] = ['=', gb_val]
-            sel, (count, ave, sum, var, std) = self.query(sub_query)
-            if count > 0:
-                results[gb_val] = (count, ave, sum, var, std)
+        predicates, target_col = query['where'], query['target']
+        target_col_idx = self.get_col_id(target_col)
+        mask = np.ones(len(self.data)).astype(np.bool_)
+        for col in self.columns:
+            # Skips the first predicate in the predicates.
+            if col not in predicates:
+                continue
+            op, val = predicates[col]
+            # Returns the index of the column in the data.
+            if op in OPS:
+                inds = OPS[op](self.data[col], val)
+            elif op.lower() in ['between', 'in']:
+                lb, ub = val
+                inds = OPS['>='](self.data[col], lb) & OPS['<='](self.data[col], ub)
+            mask &= inds.array.to_numpy()
+        filted_df = self.data.iloc[mask]
+        groups = filted_df.groupby(gb_col)[target_col]
+        for gb_val, cnt, avg, sum, var, std in zip(groups.count().keys(), groups.count(), groups.mean(), groups.sum(), groups.var(), groups.std()):
+            if np.isnan(std):
+                std = 0
+            if np.isnan(var):
+                var = 0
+            results[gb_val] = [cnt, avg, sum, var, std]
+        # for val, agg in groups.sum():
+        #     results[col] = [agg]
+        # for val, agg in groups.sum():
+        #     results[col] = [agg]
+
+
+        # target_col_data = self.data_np[:, target_col_idx]
+        # for gb_val in tqdm(gb_distinct_vals):
+        #     gb_mask = mask & (self.data[gb_col] == gb_val)
+        #     filted_data = target_col_data[gb_mask]
+        #     count = mask.sum()
+        #     if count == 0:
+        #         continue
+        #     sel = count / (self.n * 1.0)
+        #     sum = filted_data.sum()
+        #     ave = filted_data.mean()
+        #     var = filted_data.var()
+        #     std = filted_data.std()
+        #     results[gb_val] = [count, ave, sum, var, std]
+        #     pass
         return results
 
     def __del__(self):

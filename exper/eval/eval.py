@@ -11,9 +11,9 @@ from table_wapper import TableWrapper
 from utils import q_error, relative_error, sMAPE,seed_everything, OUTPUT_ROOT, get_logger
 
 SEED = 3407
-DATASET_NAME = 'flights'
+DATASET_NAME = 'lineitemext'
 DEQUAN_TYPE = 'spline'
-MODEL_SIZE = 'small'
+MODEL_SIZE = 'tiny'
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 
@@ -22,7 +22,7 @@ INTEGRATOR = 'Vegas'
 N_QUERIES = 100
 N_SAMPLE_POINT = 16000 
 MAX_ITERATION = 2
-NUM_PREDICATES_RANGE = (1, 1)
+NUM_PREDICATES_RANGE = (1, 5)
 
 Alpha = 0.4
 
@@ -36,7 +36,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_availabl
 
 
 def eval():
-    logger = get_logger(OUT_DIR, 'eval.log')
+    # logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
 
@@ -52,7 +52,7 @@ def eval():
         device=DEVICE,
         alpha=Alpha
     )
-    logger.info(f"Full range integrator is {query_engine.full_domain_integrate()}")
+    print(f"Full range integrator is {query_engine.full_domain_integrate()}")
     metics = []
     for idx in range(N_QUERIES):
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
@@ -63,23 +63,23 @@ def eval():
 
         r_cnt, r_ave, r_sum, r_var, r_std = metric(cnt_pred, cnt_real), metric(ave_pred, ave_real), metric(sum_pred, sum_real), metric(var_pred, var_real), metric(std_pred, std_real)
 
-        logger.info(f'\nquery {idx}:{query} selectivity:{100 * sel_real:.3f}% latency:{ms:.3f} ms')
-        logger.info("true:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        print(f'\nquery {idx}:{query} selectivity:{100 * sel_real:.3f}% latency:{ms:.3f} ms')
+        print("true:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_real, ave_real, sum_real, var_real, std_real))
-        logger.info("pred:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+        print("pred:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_pred, ave_pred, sum_pred, var_pred, std_pred))
-        logger.info("metric:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f}".format(r_cnt, r_ave, r_sum, r_var, r_std))
+        print("metric:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f}".format(r_cnt, r_ave, r_sum, r_var, r_std))
         metics.append([ms, r_cnt, r_ave, r_sum, r_var, r_std])
     metics = pd.DataFrame(metics, columns=['ms', 'rcnt', 'rave', 'rsum', 'rvar', 'rstd'])
     metics.to_csv(os.path.join(OUT_DIR, 'eval.csv'))
 
-    logger.info("mean\n" + str(metics.mean()) + '\n')
-    logger.info(".5\n" + str(metics.quantile(0.5)) + '\n')
+    print("mean\n" + str(metics.mean()) + '\n')
+    print(".5\n" + str(metics.quantile(0.5)) + '\n')
 
 
-#     logger.info(".95", metics.quantile(0.95), '\n')
-#     logger.info(".99", metics.quantile(0.99), '\n')
-#     logger.info("max", metics.max(), '\n')
+#     print(".95", metics.quantile(0.95), '\n')
+#     print(".99", metics.quantile(0.99), '\n')
+#     print("max", metics.max(), '\n')
 
 
 if __name__ == '__main__':

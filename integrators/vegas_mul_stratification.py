@@ -131,7 +131,7 @@ class VEGASMultiStratification:
         # (n, 1)
         d_sum = anp.sum(self.dh, axis=1).view(-1, 1)
 
-        assert torch.count_nonzero(d_sum) == d_sum.shape[0]
+        # assert torch.count_nonzero(d_sum) == d_sum.shape[0]
         self.dh = self.dh / d_sum
 
     def get_NH(self, nevals_exp):

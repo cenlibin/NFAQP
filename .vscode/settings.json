@@ -1,5 +1,16 @@
 {
     "editor.indentSize": "tabSize",
-    "terminal.integrated.env.windows": {"PYTHONPATH":"/home/clb/AQP"}
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "/home/clb/AQP"
+    },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "output/**": true,
+        "*.csv": true,
+        "*.log": true
+    }
+    
     
 }

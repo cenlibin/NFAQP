@@ -17,14 +17,14 @@ from plot import plot_err
 
 METRIC = sMAPE               #
 SEED = 42332
-DATASET_NAME = 'flights'
+DATASET_NAME = 'lineitem'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
-REMAKE_VERDICTDB = True
+REMAKE_VERDICTDB = False
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 N_QUERIES = 10
-NUM_PREDICATES_RANGE = [1, 3]
+NUM_PREDICATES_RANGE = [1, 5]
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 
@@ -36,9 +36,21 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = True
 torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_available() else 'torch.FloatTensor')
 
+def groupby_answer_to_str(res):
+    s = ''
+    for k in res:
+        s += f'{k}:['
+        for i in res[k]:
+            s += f'{i:.3f}'
+            if i != res[k][-1]:
+                s += ', '
+        s += ']\n'
+    return s[:-1]
+
 def eval():
     gap = 200
     # logger = get_logger(OUT_DIR, 'eval.log')
+    print(DATASET_NAME)
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     N, dim = table_wapper.data.shape
@@ -62,24 +74,38 @@ def eval():
 
     eval_csv = []
     for idx in range(N_QUERIES):
-        n_p = idx // gap + 1
-        NUM_PREDICATES_RANGE[0] = n_p
-        NUM_PREDICATES_RANGE[1] = n_p
+        # n_p = idx // gap + 1
+        # NUM_PREDICATES_RANGE[0] = n_p
+        # NUM_PREDICATES_RANGE[1] = n_p
         query = table_wapper.generate_query(gb=True, num_predicates_ranges=NUM_PREDICATES_RANGE)
         real = table_wapper.query(query)
+        print(query)
+        print(f'real:\n{groupby_answer_to_str(real)}')
         n_predicates = len(query['where'])
         n_groups = len(real)
         
         T = TimeTracker()
         flow_pred = query_engine.gb_query(query)
         t1 = T.report_interval_time_ms(f"flow")
+        
         verdict_pred = verdict_engine.gb_query(query)
         t2 = T.report_interval_time_ms(f"verdict")
+        
         vae_pred = vae_engine.gb_query(query)
         t3 = T.report_interval_time_ms(f"vae")
+        
         deepdb_pred = deepdb_engine.gb_query(query)
         t4 = T.report_interval_time_ms(f"deepdb")
         
+        
+        print(f'\nflow:{t1} ms\n{groupby_answer_to_str(flow_pred)}')
+        print('err:', groupby_error(flow_pred, real, METRIC))
+        print(f'\nverdictdb:{t2} ms\n{groupby_answer_to_str(verdict_pred)}')
+        print('err:', groupby_error(verdict_pred, real, METRIC))
+        print(f'\nvae:{t3} ms\n{groupby_answer_to_str(vae_pred)}')
+        print('err:', groupby_error(vae_pred, real, METRIC))
+        print(f'\ndeepdb:{t4} ms\n{groupby_answer_to_str(deepdb_pred)}')
+        print('err:', groupby_error(deepdb_pred, real, METRIC)[:-2])
 
         fr_cnt, fr_ave, fr_sum, fr_var, fr_std = groupby_error(flow_pred, real, METRIC)
         pr_cnt, pr_ave, pr_sum, pr_var, pr_std = groupby_error(verdict_pred, real, METRIC)
@@ -128,7 +154,6 @@ def eval():
                     'deepdb_cnt_err', 'deepdb_avg_err', 'deepdb_sum_err', 'deepdb_latency'])
     
     eval_csv.to_csv(os.path.join(OUT_DIR, 'eval-groupby.csv'))
-
     print("mean\n" + str(eval_csv.mean()) + '\n')
     print(".5\n" + str(eval_csv.quantile(0.5)) + '\n')
 

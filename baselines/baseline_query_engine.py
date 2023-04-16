@@ -94,7 +94,7 @@ class VerdictEngine:
                 else:
                     where += f'{col} {op} {val} '
 
-            for agg in ['COUNT', 'AVG', 'SUM', 'VARIANCE','STDDEV']:
+            for agg in ['COUNT', 'AVG', 'SUM','STDDEV']:
                 sql = f'SELECT {gb}, {agg}({target}) FROM {TARGET_DB}.{self.dataset} {where}GROUP BY {gb}'
                 # mysql_pred = self.mysql_conn.execute(sql)
                 verdict_pred = self.verdict_conn.sql(sql)
@@ -104,12 +104,14 @@ class VerdictEngine:
                     gb_val, agg_val = line[0], line[1]
                     agg_val = float(agg_val if agg_val is not None else 0)
                     agg_val /= (self.sample_rate if agg in ['COUNT', 'SUM'] else 1.0)
-                    if gb_val not in res:
+                    if agg == 'COUNT':
                         res[gb_val] = [agg_val]
+                    elif agg == "STDDEV":
+                        res[gb_val] += [agg_val ** 2, agg_val]
                     else:
                         res[gb_val].append(agg_val)
 
-                return res
+            return res
 
 
     def generate_sample(self, dataset_name):
@@ -185,7 +187,6 @@ class VAEEngine:
         results = {}
         gb_col = query['gb']
         for gb_val, df in self.df.groupby(gb_col):
-        
             sub_query = {
                 "where": deepcopy(query['where']),
                 "target": query['target'],
