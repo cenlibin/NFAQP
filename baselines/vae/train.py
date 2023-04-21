@@ -17,7 +17,7 @@ parser.add_argument('--output_dir', type=str, action='store', default='outputs/{
                     help='Path to the output directory')
 parser.add_argument('--data_output_dir', type=str, action='store', default='outputs/{}/'.format('vae-orders'),
                     help='Path to the processed data output directory')
-parser.add_argument('--batch_size', type=int, action='store', default=64,
+parser.add_argument('--batch_size', type=int, action='store', default=512,
                     help='Batch size for training. ' +
                          'Default: 64.')
 parser.add_argument('--latent_dim', type=int, action='store', default=64,

@@ -17,14 +17,17 @@ from plot import plot_err
 
 METRIC = sMAPE               #
 SEED = 42332
-DATASET_NAME = 'lineitem'
+DATASET_NAME = 'lineitemext'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
 REMAKE_VERDICTDB = False
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
-N_QUERIES = 10
-NUM_PREDICATES_RANGE = [1, 5]
+N_QUERIES = 200
+GAP = 50
+INCREASET_N_PREDICATES = False
+NUM_PREDICATES_RANGE = [1, 8]
+
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 
@@ -37,6 +40,7 @@ torch.backends.cudnn.benchmark = True
 torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_available() else 'torch.FloatTensor')
 
 def groupby_answer_to_str(res):
+    res = dict(sorted(res.items(), key=lambda x: x[0]))
     s = ''
     for k in res:
         s += f'{k}:['
@@ -47,14 +51,17 @@ def groupby_answer_to_str(res):
         s += ']\n'
     return s[:-1]
 
-def eval():
-    gap = 200
+def groupby_eval():
+
     # logger = get_logger(OUT_DIR, 'eval.log')
     print(DATASET_NAME)
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     N, dim = table_wapper.data.shape
-    NUM_PREDICATES_RANGE[1] = dim
+    if INCREASET_N_PREDICATES:
+        global N_QUERIES
+        N_QUERIES = GAP * dim
+        NUM_PREDICATES_RANGE[1] = dim
     print("n_predicates_range ", NUM_PREDICATES_RANGE)
     query_engine = QueryEngine(
         model,
@@ -74,38 +81,39 @@ def eval():
 
     eval_csv = []
     for idx in range(N_QUERIES):
-        # n_p = idx // gap + 1
-        # NUM_PREDICATES_RANGE[0] = n_p
-        # NUM_PREDICATES_RANGE[1] = n_p
+        if INCREASET_N_PREDICATES:
+            n_p = idx // GAP + 1
+            NUM_PREDICATES_RANGE[0] = n_p
+            NUM_PREDICATES_RANGE[1] = n_p
         query = table_wapper.generate_query(gb=True, num_predicates_ranges=NUM_PREDICATES_RANGE)
-        real = table_wapper.query(query)
-        print(query)
-        print(f'real:\n{groupby_answer_to_str(real)}')
+        real = table_wapper.groupby_query(query)
         n_predicates = len(query['where'])
         n_groups = len(real)
+        print('\n\n', query, f'n_predicates:{n_predicates} n_groups:{n_groups}')
+        print(f'real:\n{groupby_answer_to_str(real)}')
         
         T = TimeTracker()
-        flow_pred = query_engine.gb_query(query)
+        flow_pred = query_engine.groupby_query(query)
         t1 = T.report_interval_time_ms(f"flow")
         
-        verdict_pred = verdict_engine.gb_query(query)
+        verdict_pred = verdict_engine.groupby_query(query)
         t2 = T.report_interval_time_ms(f"verdict")
         
-        vae_pred = vae_engine.gb_query(query)
+        vae_pred = vae_engine.groupby_query(query)
         t3 = T.report_interval_time_ms(f"vae")
         
-        deepdb_pred = deepdb_engine.gb_query(query)
+        deepdb_pred = deepdb_engine.groupby_query(query)
         t4 = T.report_interval_time_ms(f"deepdb")
         
         
         print(f'\nflow:{t1} ms\n{groupby_answer_to_str(flow_pred)}')
-        print('err:', groupby_error(flow_pred, real, METRIC))
+        # print('err:', groupby_error(flow_pred, real, METRIC))
         print(f'\nverdictdb:{t2} ms\n{groupby_answer_to_str(verdict_pred)}')
-        print('err:', groupby_error(verdict_pred, real, METRIC))
+        # print('err:', groupby_error(verdict_pred, real, METRIC))
         print(f'\nvae:{t3} ms\n{groupby_answer_to_str(vae_pred)}')
-        print('err:', groupby_error(vae_pred, real, METRIC))
+        # print('err:', groupby_error(vae_pred, real, METRIC))
         print(f'\ndeepdb:{t4} ms\n{groupby_answer_to_str(deepdb_pred)}')
-        print('err:', groupby_error(deepdb_pred, real, METRIC)[:-2])
+        # print('err:', groupby_error(deepdb_pred, real, METRIC)[:-2])
 
         fr_cnt, fr_ave, fr_sum, fr_var, fr_std = groupby_error(flow_pred, real, METRIC)
         pr_cnt, pr_ave, pr_sum, pr_var, pr_std = groupby_error(verdict_pred, real, METRIC)
@@ -113,24 +121,6 @@ def eval():
         dr_cnt, dr_ave, dr_sum, _     ,_       = groupby_error(deepdb_pred, real, METRIC)
 
 
-        # cnt_real, ave_real, sum_real, var_real, std_real = real
-        # cnt_flow, ave_flow, sum_flow, var_flow, std_flow = flow_pred
-        # cnt_ver, ave_ver, sum_ver, var_ver, std_ver = verdict_pred
-        # cnt_vae, ave_vae, sum_vae, var_vae, std_vae = vae_pred
-        # cnt_deepdb, ave_deepdb, sum_deepdb = deepdb_pred
-
-        
-        # print("true:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-        #             format(cnt_real, ave_real, sum_real, var_real, std_real))
-        # print("flow:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-        #             format(cnt_flow, ave_flow, sum_flow, var_flow, std_flow))
-        # print("verdictdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-        #             format(cnt_ver, ave_ver, sum_ver, var_ver, std_ver))
-        # print("vae:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-        #             format(cnt_vae, ave_vae, sum_vae, var_vae, std_vae))
-        # print("deepdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} ".
-        #             format(cnt_deepdb, ave_deepdb, sum_deepdb))
-        
         print("flow_err:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std))
         print("verdictdb_err:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
@@ -160,5 +150,4 @@ def eval():
 
     # plot_err(DATASET_NAME, eval_csv)
 if __name__ == '__main__':
-
-    eval()
+    groupby_eval()

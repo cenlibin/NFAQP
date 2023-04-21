@@ -8,7 +8,7 @@ import os
 import sys
 sys.path.append('/home/clb/AQP')
 from utils import table_size
-DATASET_NAME = 'flights'
+DATASET_NAME = 'lineitemext'
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')
@@ -19,7 +19,7 @@ parser.add_argument('--output_dir', type=str, action='store',
 parser.add_argument('--data_output_dir', type=str,
                     action='store', default='outputs/{}/'.format('vae-orders'))
 parser.add_argument('--batch_size', type=int, action='store', default=64)
-parser.add_argument('--latent_dim', type=int, action='store', default=64)
+parser.add_argument('--latent_dim', type=int, action='store', default=256)
 parser.add_argument('--neuron_list', type=int, action='store', default=200,
                     help='Latent Dimension size Default: 200.')
 parser.add_argument('--epochs', type=int, action='store', default=100)

@@ -292,7 +292,7 @@ class TableWrapper:
     
 
         if query['gb'] is not None:
-            return self.gb_query(query)
+            return self.groupby_query(query)
         else:
             predicates, target_col = query['where'], query['target']
             target_col_idx = self.get_col_id(target_col)
@@ -320,7 +320,7 @@ class TableWrapper:
             std = filted_data.std()
             return sel, (count, ave, sum, var, std)
 
-    def gb_query(self, query):
+    def groupby_query(self, query):
         gb_col = query['gb']
         gb_distinct_vals = self.categorical_mapping[gb_col]['id2cate']
         results = {}

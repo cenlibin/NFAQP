@@ -10,13 +10,15 @@ from copy import deepcopy
 SOURCE_DB = 'AQP'
 TARGET_DB = 'verdictdb'
 SAMPLE_RATE = 0.01
-THRESH_HOLD = 1e9
+THRESH_HOLD = 16000
 # VAE 
 
 
 
 class VerdictEngine:
     def __init__(self, dataset_name, table_N, remake=False):
+        if dataset_name not in ['lineitemext']:
+            dataset_name += '_10BM'
 
         host = 'localhost'
         user = 'root'
@@ -34,9 +36,11 @@ class VerdictEngine:
         # self.verdict_conn = pyverdict.mysql_context(host='localhost', user='root', password=password)
         self.dataset = dataset_name
         self.N = table_N
-        self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
-        if dataset_name == 'lineitem':
-            self.sample_rate = 0.008
+        # self.sample_rate = THRESH_HOLD / table_N
+        self.sample_rate = SAMPLE_RATE
+        # self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
+        if dataset_name == 'lineitemext':
+            self.sample_rate = 0.01
         # self.sample_rate = THRESH_HOLD / self.N
         if remake:
             self.generate_sample(dataset_name)
@@ -46,10 +50,10 @@ class VerdictEngine:
 
         with HiddenPrints():
             target, gb = query['target'], query['gb']
-            target = f'`{target}`'
+            # target = f'`{target}`'
             where = '' if len(query['where']) == 0 else 'WHERE '
             for col, (op, val) in query['where'].items():
-                col = f'`{col}`'
+                # col = f'`{col}`'
                 if where != 'WHERE ':
                     where += "AND "
                 if op == '=':
@@ -60,14 +64,17 @@ class VerdictEngine:
                     where += f'{col} {op} {val} '
 
             pred = []
-            for agg in ['COUNT', 'AVG', 'SUM', 'VARIANCE', 'STDDEV']:
+            for agg in ['COUNT', 'AVG', 'SUM', 'STDDEV']:
                 sql = f'SELECT {agg}({target}) FROM {TARGET_DB}.{self.dataset} {where}'
                 verdict_pred = self.verdict_conn.sql(sql).to_numpy().item()
                 verdict_pred = float(verdict_pred if verdict_pred is not None else 0)
                 verdict_pred /= (self.sample_rate if agg in ['COUNT', 'SUM'] else 1.0)
                 # if agg == 'COUNT':
                 #     pred.append(verdict_pred / self.N)  # sel
-                pred.append(verdict_pred)
+                if agg == 'STDDEV':
+                    pred += [verdict_pred ** 2, verdict_pred]
+                else:
+                    pred.append(verdict_pred)
 
             # p_std = self.verdict_conn.sql(f'SELECT STDDEV({target}) FROM {TARGET_DB}.{self.dataset} {where}').to_numpy().item()
             # p_std = float(p_std if p_std is not None else 0)
@@ -75,7 +82,7 @@ class VerdictEngine:
             # pred = pred + [p_var, p_std]
             return pred
     
-    def gb_query(self, query):
+    def groupby_query(self, query):
 
         with HiddenPrints():
             res = {}
@@ -94,19 +101,22 @@ class VerdictEngine:
                 else:
                     where += f'{col} {op} {val} '
 
-            for agg in ['COUNT', 'AVG', 'SUM','STDDEV']:
+            for agg_i, agg in enumerate(['COUNT', 'AVG', 'SUM','STDDEV']):
                 sql = f'SELECT {gb}, {agg}({target}) FROM {TARGET_DB}.{self.dataset} {where}GROUP BY {gb}'
                 # mysql_pred = self.mysql_conn.execute(sql)
-                verdict_pred = self.verdict_conn.sql(sql)
+                try:
+                    verdict_pred = self.verdict_conn.sql(sql)
+                except ValueError:
+                    verdict_pred = pd.DataFrame([])
                 # my = self.mysql_conn.execute(sql)
                 verdict_pred = verdict_pred.to_numpy()
                 for line in verdict_pred:
                     gb_val, agg_val = line[0], line[1]
                     agg_val = float(agg_val if agg_val is not None else 0)
                     agg_val /= (self.sample_rate if agg in ['COUNT', 'SUM'] else 1.0)
-                    if agg == 'COUNT':
-                        res[gb_val] = [agg_val]
-                    elif agg == "STDDEV":
+                    if gb_val not in res:
+                        res[gb_val] = [0.0] * agg_i
+                    if agg == "STDDEV":
                         res[gb_val] += [agg_val ** 2, agg_val]
                     else:
                         res[gb_val].append(agg_val)
@@ -149,7 +159,6 @@ class VAEEngine:
         if df is None:
             df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
         
-        
         predicates, target_col = query['where'], query['target']
         data_np = df.to_numpy()
         col_id = {col:id for id, col in enumerate(self.df.columns)}
@@ -183,19 +192,54 @@ class VAEEngine:
         std = filted_data.std()
         return count, ave, sum, var, std
 
-    def gb_query(self, query):
+    def groupby_query(self, query):
         results = {}
         gb_col = query['gb']
-        for gb_val, df in self.df.groupby(gb_col):
-            sub_query = {
-                "where": deepcopy(query['where']),
-                "target": query['target'],
-                'gb': None
-            }
-            sub_query['where'][gb_col] = ['=', gb_val]
-            (count, ave, sum, var, std) = self.query(sub_query)
-            if count > 0:
-                results[gb_val] = (count, ave, sum, var, std)
+        groups = self.df.groupby(gb_col)
+        mask = np.ones(len(self.df)).astype(np.bool_)           # if choose the corrsponding rows into filted data
+        predicates, target_col = query['where'], query['target']
+        OPS = {
+            '>': np.greater,
+            '<': np.less,
+            '>=': np.greater_equal,
+            '<=': np.less_equal,
+            '=': np.equal,
+        }
+        # Returns a mask of the data for each column.
+        for col in self.df.columns:
+            # Skips the first predicate in the predicates.
+            if col not in predicates:
+                continue
+            op, val = predicates[col]
+            # Returns the index of the column in the data.
+            if op in OPS:
+                inds = OPS[op](self.df[col], val)
+            elif op.lower() in ['between', 'in']:
+                lb, ub = val
+                inds = OPS['>='](self.df[col], lb) & OPS['<='](self.df[col], ub)
+            mask &= inds.array.to_numpy()
+
+        groups = self.df[mask].groupby(gb_col)[target_col]
+        scale = self.N_SAMPLE / self.N
+        for gb_val, cnt, avg, sum, var, std in zip(groups.count().keys(), groups.count(), groups.mean(), groups.sum(), groups.var(), groups.std()):
+            if np.isnan(std):
+                std = 0
+            if np.isnan(var):
+                var = 0
+            cnt, sum = cnt / scale, sum / scale
+            results[gb_val] = [cnt, avg, sum, var, std]
+            
+
+        # for gb_val, df in self.df.groupby(gb_col):
+        #     sub_query = {
+        #         "where": deepcopy(query['where']),
+        #         "target": query['target'],
+        #         'gb': None
+        #     }
+        #     sub_query['where'][gb_col] = ['=', gb_val]
+        #     (count, ave, sum, var, std) = self.query(sub_query)
+        #     if count > 0:
+        #         results[gb_val] = (count, ave, sum, var, std)
         return results
 
     def generate_sample(self, dataset_name):
@@ -216,6 +260,7 @@ class DeepdbEngine:
             'pm25': gen_pm25_schema,
             'flights': gen_flights_schema,
             'lineitem': gen_lineitem_schema,
+            'lineitemext': gen_lineitemext_schema,
             'housing': gen_housing_schema,
         }
         self.schema = schemas[dataset_name](data_path)
@@ -264,7 +309,7 @@ class DeepdbEngine:
                 pred.append(p)
             return pred
     
-    def gb_query(self, query):
+    def groupby_query(self, query):
         with HiddenPrints():
             result = {}
 

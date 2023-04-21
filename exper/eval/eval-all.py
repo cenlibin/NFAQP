@@ -15,16 +15,18 @@ from utils import *
 from baselines import VerdictEngine, VAEEngine, DeepdbEngine
 from plot import plot_err
 
-METRIC = sMAPE               #
+METRIC = sMAPE              
 SEED = 42332
-DATASET_NAME = 'pm25'
+DATASET_NAME = 'lineitemext'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
 REMAKE_VERDICTDB = False
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 N_QUERIES = 200
-NUM_PREDICATES_RANGE = [1, 8]
+GAP = 50
+INCREASET_N_PREDICATES = False
+NUM_PREDICATES_RANGE = [1, 5]
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
 
@@ -37,13 +39,14 @@ torch.backends.cudnn.benchmark = True
 torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_available() else 'torch.FloatTensor')
 
 def eval():
-    gap = 200
     # logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     N, dim = table_wapper.data.shape
-    N_QUERIES = dim * gap
-    NUM_PREDICATES_RANGE[1] = dim
+    if INCREASET_N_PREDICATES:
+        global N_QUERIES
+        N_QUERIES = dim * GAP
+        NUM_PREDICATES_RANGE[1] = dim
     print("n_predicates_range ", NUM_PREDICATES_RANGE)
     query_engine = QueryEngine(
         model,
@@ -63,13 +66,15 @@ def eval():
 
     eval_csv = []
     for idx in range(N_QUERIES):
-        n_p = idx // gap + 1
-        NUM_PREDICATES_RANGE[0] = n_p
-        NUM_PREDICATES_RANGE[1] = n_p
+        if INCREASET_N_PREDICATES:
+            n_p = idx // GAP + 1
+            NUM_PREDICATES_RANGE[0] = n_p
+            NUM_PREDICATES_RANGE[1] = n_p
         query = table_wapper.generate_query(gb=False, num_predicates_ranges=NUM_PREDICATES_RANGE)
         sel, real = table_wapper.query(query)
         n_predicates = len(query['where'])
         print(f'\nquery {idx}:{query} selectivity:{100 * sel:.3f}% n_predicates:{n_predicates}')
+
         T = TimeTracker()
         flow_pred = query_engine.query(query)
         t1 = T.report_interval_time_ms(f"flow")
@@ -99,14 +104,14 @@ def eval():
         
         print("true:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
                     format(cnt_real, ave_real, sum_real, var_real, std_real))
-        print("flow:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(cnt_flow, ave_flow, sum_flow, var_flow, std_flow))
-        print("verdictdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(cnt_ver, ave_ver, sum_ver, var_ver, std_ver))
-        print("vae:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(cnt_vae, ave_vae, sum_vae, var_vae, std_vae))
-        print("deepdb:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} ".
-                    format(cnt_deepdb, ave_deepdb, sum_deepdb))
+        print("flow:{:.3f} ms\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+                    format(t1, cnt_flow, ave_flow, sum_flow, var_flow, std_flow))
+        print("verdictdb:{:.3f} ms\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+                    format(t2, cnt_ver, ave_ver, sum_ver, var_ver, std_ver))
+        print("vae:{:.3f} ms\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
+                    format(t3, cnt_vae, ave_vae, sum_vae, var_vae, std_vae))
+        print("deepdb:{:.3f} ms\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} ".
+                    format(t4, cnt_deepdb, ave_deepdb, sum_deepdb))
         
         print("flow_err:\ncnt:{:.3f}% ave:{:.3f}% sum:{:.3f}% var:{:.3f}% std:{:.3f}% mean:{:.3f}%".
                     format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std, fr_mean))

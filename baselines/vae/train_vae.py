@@ -1,15 +1,15 @@
 from argparse import ArgumentParser
+import os
+import sys
+sys.path.append('/home/clb/AQP')
 import time
 from utils import load_table
 from VAE import *
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import os
-import sys
-sys.path.append('/home/clb/AQP')
 from utils import get_model_size_mb
-DATASET_NAME = 'pm25'
-ROWS_THRESHOLD = 500000
+DATASET_NAME = 'lineitemext'
+ROWS_THRESHOLD = -1
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')
@@ -19,7 +19,7 @@ parser.add_argument('--data_output_dir', type=str, action='store', default='outp
 parser.add_argument('--batch_size', type=int, action='store', default=256)
 parser.add_argument('--latent_dim', type=int, action='store', default=256)
 parser.add_argument('--neuron_list', type=int, action='store', default=200, help='Latent Dimension size Default: 200.')
-parser.add_argument('--epochs', type=int, action='store', default=300)
+parser.add_argument('--epochs', type=int, action='store', default=100)
 parser.add_argument('--log_interval', type=int, action='store', default=25)
 parser.add_argument('--rejection', type=int, action='store', default=1)
 parser.add_argument('--num_samples', type=int, action='store', default=10000)
@@ -65,7 +65,7 @@ num_instance = args.num_samples
 print("Reading INPUT File")
 orig_df = load_table(DATASET_NAME)
 orig_df = orig_df.dropna().reset_index(drop=True)
-if orig_df.shape[0] >= ROWS_THRESHOLD:
+if ROWS_THRESHOLD != -1 and orig_df.shape[0] >= ROWS_THRESHOLD:
     df = orig_df.sample(ROWS_THRESHOLD).reset_index(drop=True)
 else:
     df = orig_df

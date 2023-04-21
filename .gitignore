@@ -15,4 +15,6 @@ outputs
 .vscode
 .fleet
 *.pdf
-
+*.csv
+*.zip
+*.DS_Store

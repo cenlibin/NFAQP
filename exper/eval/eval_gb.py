@@ -60,7 +60,7 @@ def eval():
         T = TimeTracker()
         reals = table_wapper.query(query)
         t0 = T.report_interval_time_ms('real query')
-        flow_preds = query_engine.gb_query(query, batch_size=GROUPBY_BATCH_SIZE)
+        flow_preds = query_engine.groupby_query(query, batch_size=GROUPBY_BATCH_SIZE)
         t1 = T.report_interval_time_ms("batch query")
 
         

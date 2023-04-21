@@ -126,7 +126,7 @@ class QueryEngine:
         if isinstance(query, list):
             return self.batch_query(query)
         if query['gb'] is not None:
-            return self.gb_query(query)
+            return self.groupby_query(query)
         self._time_start()
         predicates, target_id = query['where'], self.get_col_id(query['target'])
         legal_range, actual_range = self.get_query_range(predicates)
@@ -166,7 +166,7 @@ class QueryEngine:
         self._time_stop()
         return pred
 
-    def gb_query(self, query, batch_size=150):
+    def groupby_query(self, query, batch_size=150):
 
         # serial_res = self.gb_serial(query)
         self._time_start()

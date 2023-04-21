@@ -81,6 +81,8 @@ def batch_relative_error(pred, real):
 
 def sMAPE(pred, real):
     """ bounded relative error """
+    if abs(pred) + abs(real) == 0 :
+        return 0
     return 2 * abs(pred - real) / (abs(pred) + abs(real))
 
 def groupby_error(pred, real, eps=1e-9, metic=sMAPE):
