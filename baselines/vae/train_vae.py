@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from utils import get_model_size_mb
 DATASET_NAME = 'lineitemext'
-ROWS_THRESHOLD = -1
+ROWS_THRESHOLD = 999795
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')

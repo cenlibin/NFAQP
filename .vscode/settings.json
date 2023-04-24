@@ -25,7 +25,8 @@
             "username": "root",
             "password": "7837"
         }
-    ]
+    ],
+    "python.analysis.typeCheckingMode": "off"
     
     
 }

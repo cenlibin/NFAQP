@@ -43,7 +43,8 @@ class TableWrapper:
                 self.numetric_cols.append(col)
 
         self.meta_path = os.path.join(out_path, 'meta.pickle')
-        self.query_sql = open(os.path.join(out_path, 'query.sql'), 'w')
+        self.query_groupby_sql = open(os.path.join(out_path, 'query-groupby.sql'), 'a')
+        self.query_sql = open(os.path.join(out_path, 'query.sql'), 'a')
         if not os.path.exists(self.meta_path) or not read_meta:
             self.create_meta_data()
             tracker.report_interval_time_ms('Create Meta Data')
@@ -191,14 +192,15 @@ class TableWrapper:
         else:
             num_predicates = self.random_state.randint(1, len(self.categorical_cols) + 1)
 
+        # cols_to_apply_filtes = self.random_state.choice(self.numetric_ids, num_predicates)
         num_point = min(self.random_state.randint(0, 3), num_predicates, len(self.categorical_ids))
+        # num_point = min(num_predicates, len(self.categorical_ids))
         num_range = min(num_predicates - num_point, len(self.numetric_ids))
 
         target_id = self.random_state.choice(self.numetric_ids, 1)
         qry['target'] = self.get_col_name(target_id)
         if gb:
             groupby_id = self.random_state.choice(self.categorical_ids, 1)
-            # groupby_id = 5
             qry['gb'] = self.get_col_name(groupby_id)
 
         loc = self.random_state.randint(0, self.n)
@@ -208,6 +210,7 @@ class TableWrapper:
 
         range_ids = list(self.random_state.choice(self.numetric_ids, size=num_range, replace=False))
         point_ids = list(self.random_state.choice(self.categorical_ids, size=num_point, replace=False))
+
         if gb:
             if groupby_id in point_ids:
                 point_ids.remove(int(groupby_id))
@@ -242,7 +245,7 @@ class TableWrapper:
             print('no legal for ', qry, '\n\n\n')
             qry = self.generate_query(gb, num_predicates_ranges)
         for sql in self.get_qry_sql(qry):
-            self.query_sql.write(sql + ';\n')
+            self.query_sql.write(sql + ';\n' if sql != ' ' else '') if gb is None else self.query_groupby_sql.write(sql + ';\n' if sql != ' ' else '')
         return qry
 
     def is_query_legal(self, query):
@@ -279,9 +282,10 @@ class TableWrapper:
         # target = f'`{target}`'
         groupby = f'GROUP BY `{gb}` ' if gb is not None else ''
         sqls = []
-        for agg in ['COUNT', 'AVG', 'SUM']:
+        for agg in ['COUNT', 'AVG', 'SUM', 'VARIANCE', 'STDDEV']:
             sql = f'SELECT {agg}({target}) ' + from_ + where + groupby
             sqls.append(sql)
+        sqls.append(" ")
         return sqls
 
     def generate_N_query(self, n):
@@ -371,6 +375,7 @@ class TableWrapper:
 
     def __del__(self):
         self.query_sql.close()
+        self.query_groupby_sql.close()
 
 
 def make_query(dataset_name, out_dir, dequan_type, n_queries, n_predicates, gb=False):

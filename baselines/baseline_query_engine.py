@@ -6,7 +6,13 @@ import numpy as np
 sys.path.append('/home/clb/AQP')
 from utils import *
 from copy import deepcopy
-# verdict const parameter
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'deepdb'))
+from baselines.deepdb.ensemble_compilation.spn_ensemble import read_ensemble
+from baselines.deepdb.evaluation.utils import parse_query
+from baselines.deepdb.schemas import *
+
+# VerdictDB
 SOURCE_DB = 'AQP'
 TARGET_DB = 'verdictdb'
 SAMPLE_RATE = 0.01
@@ -19,6 +25,8 @@ class VerdictEngine:
     def __init__(self, dataset_name, table_N, remake=False):
         if dataset_name not in ['lineitemext']:
             dataset_name += '_10BM'
+        else:
+            dataset_name += '5g'
 
         host = 'localhost'
         user = 'root'
@@ -36,19 +44,14 @@ class VerdictEngine:
         # self.verdict_conn = pyverdict.mysql_context(host='localhost', user='root', password=password)
         self.dataset = dataset_name
         self.N = table_N
-        # self.sample_rate = THRESH_HOLD / table_N
         self.sample_rate = SAMPLE_RATE
-        # self.sample_rate = SAMPLE_RATE if SAMPLE_RATE * self.N < THRESH_HOLD else THRESH_HOLD / self.N
-        if dataset_name == 'lineitemext':
-            self.sample_rate = 0.01
-        # self.sample_rate = THRESH_HOLD / self.N
+
         if remake:
             self.generate_sample(dataset_name)
 
     def query(self, query):
-    
-
         with HiddenPrints():
+            T = TimeTracker()
             target, gb = query['target'], query['gb']
             # target = f'`{target}`'
             where = '' if len(query['where']) == 0 else 'WHERE '
@@ -75,16 +78,18 @@ class VerdictEngine:
                     pred += [verdict_pred ** 2, verdict_pred]
                 else:
                     pred.append(verdict_pred)
+                if agg == 'SUM':
+                    latency_ms = T.report_interval_time_ms()
 
             # p_std = self.verdict_conn.sql(f'SELECT STDDEV({target}) FROM {TARGET_DB}.{self.dataset} {where}').to_numpy().item()
             # p_std = float(p_std if p_std is not None else 0)
             # p_var = p_std ** 2
             # pred = pred + [p_var, p_std]
-            return pred
+            return latency_ms, pred
     
     def groupby_query(self, query):
-
         with HiddenPrints():
+            T = TimeTracker()
             res = {}
             target, gb = query['target'], query['gb']
             target = f'{target}'
@@ -120,8 +125,10 @@ class VerdictEngine:
                         res[gb_val] += [agg_val ** 2, agg_val]
                     else:
                         res[gb_val].append(agg_val)
+                if agg == 'SUM':
+                    latency_ms = T.report_interval_time_ms()
 
-            return res
+            return latency_ms, res
 
 
     def generate_sample(self, dataset_name):
@@ -141,14 +148,13 @@ class VAEEngine:
     def __init__(self, dataset_name, table_N, remake=False):
         N_SAMPLE = 100000
         # N_SAMPLE = int(table_size[dataset_name] * 0.01)
-        self.df = pd.read_csv(f"/home/clb/AQP/output/VAE-{dataset_name}/samples_{N_SAMPLE}.csv")
         self.N_SAMPLE = N_SAMPLE
         self.dataset_name = dataset_name
         self.N = table_N
-        self.df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
         
-
+        
     def query(self, query, df=None):
+        T = TimeTracker()
         OPS = {
             '>': np.greater,
             '<': np.less,
@@ -158,45 +164,50 @@ class VAEEngine:
         }
         if df is None:
             df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
-        
+
         predicates, target_col = query['where'], query['target']
         data_np = df.to_numpy()
-        col_id = {col:id for id, col in enumerate(self.df.columns)}
+        col_id = {col:id for id, col in enumerate(df.columns)}
         target_col_idx = col_id[target_col]
         # target_col_idx = self.get_col_id(target_col)
         mask = np.ones(len(df)).astype(np.bool_)
         # Returns a mask of the data for each column.
-        for col in self.df.columns:
+        for col in df.columns:
             # Skips the first predicate in the predicates.
             if col not in predicates:
                 continue
             op, val = predicates[col]
             # Returns the index of the column in the data.
             if op in OPS:
-                inds = OPS[op](self.df[col], val)
+                inds = OPS[op](df[col], val)
             elif op.lower() in ['between', 'in']:
                 lb, ub = val
-                inds = OPS['>='](self.df[col], lb) & OPS['<='](self.df[col], ub)
+                inds = OPS['>='](df[col], lb) & OPS['<='](df[col], ub)
             mask &= inds.array.to_numpy()
 
         filted_data = data_np[:, target_col_idx][mask]
         count = mask.sum()
         if count == 0:
-            return 0, 0, 0, 0, 0
-        sel = count / (len(self.df) * 1.0)
+            return T.report_interval_time_ms(), (0, 0, 0, 0, 0)
+        sel = count / (len(df) * 1.0)
         count = sel * self.N
         # sum = filted_data.sum()
         ave = filted_data.mean()
         sum = count * ave
+        latency_ms = T.report_interval_time_ms()
         var = filted_data.var()
         std = filted_data.std()
-        return count, ave, sum, var, std
+        return latency_ms, (count, ave, sum, var, std)
 
-    def groupby_query(self, query):
+    def groupby_query(self, query, df=None):
+        T = TimeTracker()
+        if df is None:
+            df = pd.read_csv(f"/home/clb/AQP/output/VAE-{self.dataset_name}/samples_{self.N_SAMPLE}.csv")
+
         results = {}
         gb_col = query['gb']
-        groups = self.df.groupby(gb_col)
-        mask = np.ones(len(self.df)).astype(np.bool_)           # if choose the corrsponding rows into filted data
+        groups = df.groupby(gb_col)
+        mask = np.ones(len(df)).astype(np.bool_)           # if choose the corrsponding rows into filted data
         predicates, target_col = query['where'], query['target']
         OPS = {
             '>': np.greater,
@@ -206,20 +217,20 @@ class VAEEngine:
             '=': np.equal,
         }
         # Returns a mask of the data for each column.
-        for col in self.df.columns:
+        for col in df.columns:
             # Skips the first predicate in the predicates.
             if col not in predicates:
                 continue
             op, val = predicates[col]
             # Returns the index of the column in the data.
             if op in OPS:
-                inds = OPS[op](self.df[col], val)
+                inds = OPS[op](df[col], val)
             elif op.lower() in ['between', 'in']:
                 lb, ub = val
-                inds = OPS['>='](self.df[col], lb) & OPS['<='](self.df[col], ub)
+                inds = OPS['>='](df[col], lb) & OPS['<='](df[col], ub)
             mask &= inds.array.to_numpy()
 
-        groups = self.df[mask].groupby(gb_col)[target_col]
+        groups = df[mask].groupby(gb_col)[target_col]
         scale = self.N_SAMPLE / self.N
         for gb_val, cnt, avg, sum, var, std in zip(groups.count().keys(), groups.count(), groups.mean(), groups.sum(), groups.var(), groups.std()):
             if np.isnan(std):
@@ -228,28 +239,13 @@ class VAEEngine:
                 var = 0
             cnt, sum = cnt / scale, sum / scale
             results[gb_val] = [cnt, avg, sum, var, std]
-            
-
-        # for gb_val, df in self.df.groupby(gb_col):
-        #     sub_query = {
-        #         "where": deepcopy(query['where']),
-        #         "target": query['target'],
-        #         'gb': None
-        #     }
-        #     sub_query['where'][gb_col] = ['=', gb_val]
-        #     (count, ave, sum, var, std) = self.query(sub_query)
-        #     if count > 0:
-        #         results[gb_val] = (count, ave, sum, var, std)
-        return results
+        latency_ms = T.report_interval_time_ms()
+        return latency_ms, results
 
     def generate_sample(self, dataset_name):
         pass
 
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'deepdb'))
-from baselines.deepdb.ensemble_compilation.spn_ensemble import read_ensemble
-from baselines.deepdb.evaluation.utils import parse_query
-from baselines.deepdb.schemas import *
 class DeepdbEngine:
     def __init__(self, dataset_name, table_N, remake=False):
         self.root = f'/home/clb/AQP/output/deepdb-{dataset_name}/'
@@ -271,8 +267,8 @@ class DeepdbEngine:
 
     def query(self, query):
         with HiddenPrints():
+            T = TimeTracker()
             result = []
-
             rdc_spn_selection = False
             pairwise_rdc_path = None
             merge_indicator_exp = True
@@ -307,12 +303,12 @@ class DeepdbEngine:
                                                         debug=debug,
                                                         confidence_intervals=show_confidence_intervals)
                 pred.append(p)
-            return pred
+            return T.report_interval_time_ms(), pred
     
     def groupby_query(self, query):
         with HiddenPrints():
+            T = TimeTracker()
             result = {}
-
             rdc_spn_selection = False
             pairwise_rdc_path = None
             merge_indicator_exp = True
@@ -341,19 +337,24 @@ class DeepdbEngine:
                 sql = f'SELECT {agg}({target}) FROM {self.dataset} {where}group by {gb}'
 
                 qry = parse_query(sql.strip(), self.schema)
-                _, p = self.ensemble.evaluate_query(qry, rdc_spn_selection=rdc_spn_selection,
-                                                        pairwise_rdc_path=pairwise_rdc_path,
-                                                        merge_indicator_exp=merge_indicator_exp,
-                                                        max_variants=max_variants,
-                                                        exploit_overlapping=exploit_overlapping,
-                                                        debug=debug,
-                                                        confidence_intervals=show_confidence_intervals)
+                try:
+                    _, p = self.ensemble.evaluate_query(qry, rdc_spn_selection=rdc_spn_selection,
+                                                            pairwise_rdc_path=pairwise_rdc_path,
+                                                            merge_indicator_exp=merge_indicator_exp,
+                                                            max_variants=max_variants,
+                                                            exploit_overlapping=exploit_overlapping,
+                                                            debug=debug,
+                                                            confidence_intervals=show_confidence_intervals)
+                except ValueError:
+                    return T.report_interval_time_ms(), {}
                 for line in p:
                     gb_val, agg_val = line
                     if gb_val not in result:
                         result[gb_val] = [agg_val]
                     else:
                         result[gb_val].append(agg_val)
+            
 
 
-            return result
+
+            return T.report_interval_time_ms(), result

@@ -86,17 +86,23 @@ def sMAPE(pred, real):
     return 2 * abs(pred - real) / (abs(pred) + abs(real))
 
 def groupby_error(pred, real, eps=1e-9, metic=sMAPE):
+    n_groups = len(real)
+    n_finish_groups = 0
+
     errs = np.zeros([len(real), 5])
     for i, k in enumerate(real.keys()):
         if k not in pred:
             errs[i] = np.ones(5) * 2.0
             continue
+        n_finish_groups += 1
         for j, (p, r) in enumerate(zip(pred[k], real[k])):
             err = metic(p, r)
             errs[i, j] = err
     errs = errs.mean(0)
 
-    return list(errs)
+    return list(errs), n_finish_groups / n_groups
+
+
 def log_metric(m):
     s = ''
     for c in m.index:

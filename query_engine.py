@@ -4,7 +4,7 @@ from copy import deepcopy
 import torch
 import os
 from time import time
-from utils import PROJECT_DIR
+from utils import PROJECT_DIR, TimeTracker
 from integrators import MonteCarloAQP, VegasAQP, VEGAS
 from datasets import eps
 from tqdm import tqdm
@@ -123,6 +123,7 @@ class QueryEngine:
         return torch.FloatTensor(legal_range).to(self.device), torch.FloatTensor(actual_range).to(self.device)
 
     def query(self, query):
+        T = TimeTracker()
         if isinstance(query, list):
             return self.batch_query(query)
         if query['gb'] is not None:
@@ -139,9 +140,10 @@ class QueryEngine:
 
         count = sel * self.n
         sum = ave * count
+        latency_ms = T.report_interval_time_ms()
         std = math.sqrt(var)
-        self._time_stop()
-        return count, ave, sum, var, std
+        
+        return latency_ms, (count, ave, sum, var, std)
 
     def batch_query(self, queries):
         self._time_start()
@@ -166,10 +168,9 @@ class QueryEngine:
         self._time_stop()
         return pred
 
-    def groupby_query(self, query, batch_size=150):
+    def groupby_query(self, query, batch_size=300):
+        T = TimeTracker()
 
-        # serial_res = self.gb_serial(query)
-        self._time_start()
         predicates, target_col, groupby_col = query['where'], query['target'], query['gb']
         target_id, groupby_id = self.get_col_id(target_col), self.get_col_id(groupby_col)
         legal_range, actual_range = self.get_query_range(predicates)
@@ -215,9 +216,9 @@ class QueryEngine:
         results = results.cpu().numpy()
         results = {gb_val: list(pred) for gb_val, pred in zip(gb_dist_vals, results)}
 
-        self._time_stop()
+        latency_ms = T.report_interval_time_ms()
 
-        return results
+        return latency_ms, results
 
     def gb_serial(self, query):
         self._time_start()

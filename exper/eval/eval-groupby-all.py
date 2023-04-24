@@ -16,17 +16,17 @@ from baselines import VerdictEngine, VAEEngine, DeepdbEngine
 from plot import plot_err
 
 METRIC = sMAPE               #
-SEED = 42332
+SEED = 4233
 DATASET_NAME = 'lineitemext'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
-REMAKE_VERDICTDB = False
+REMAKE_VERDICTDB = True
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
-N_QUERIES = 200
+N_QUERIES = 80
 GAP = 50
 INCREASET_N_PREDICATES = False
-NUM_PREDICATES_RANGE = [1, 8]
+NUM_PREDICATES_RANGE = [1, 9]
 
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
@@ -42,13 +42,18 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor' if torch.cuda.is_availabl
 def groupby_answer_to_str(res):
     res = dict(sorted(res.items(), key=lambda x: x[0]))
     s = ''
+    N_PRINT_GROUP_THRESH = 10
+    g_cnt = 0
     for k in res:
+        g_cnt += 1
         s += f'{k}:['
         for i in res[k]:
             s += f'{i:.3f}'
             if i != res[k][-1]:
                 s += ', '
         s += ']\n'
+        if g_cnt == N_PRINT_GROUP_THRESH:
+            break
     return s[:-1]
 
 def groupby_eval():
@@ -58,10 +63,12 @@ def groupby_eval():
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     N, dim = table_wapper.data.shape
+    # NUM_PREDICATES_RANGE[1] = dim
     if INCREASET_N_PREDICATES:
         global N_QUERIES
         N_QUERIES = GAP * dim
         NUM_PREDICATES_RANGE[1] = dim
+        
     print("n_predicates_range ", NUM_PREDICATES_RANGE)
     query_engine = QueryEngine(
         model,
@@ -89,61 +96,44 @@ def groupby_eval():
         real = table_wapper.groupby_query(query)
         n_predicates = len(query['where'])
         n_groups = len(real)
-        print('\n\n', query, f'n_predicates:{n_predicates} n_groups:{n_groups}')
+        print(f'\n\nquery {idx + 1} / {N_QUERIES}:', query, f'n_predicates:{n_predicates} n_groups:{n_groups}')
         print(f'real:\n{groupby_answer_to_str(real)}')
         
         T = TimeTracker()
-        flow_pred = query_engine.groupby_query(query)
-        t1 = T.report_interval_time_ms(f"flow")
-        
-        verdict_pred = verdict_engine.groupby_query(query)
-        t2 = T.report_interval_time_ms(f"verdict")
-        
-        vae_pred = vae_engine.groupby_query(query)
-        t3 = T.report_interval_time_ms(f"vae")
-        
-        deepdb_pred = deepdb_engine.groupby_query(query)
-        t4 = T.report_interval_time_ms(f"deepdb")
-        
+        t1, flow_pred = query_engine.groupby_query(query)
+        t2, verdict_pred = verdict_engine.groupby_query(query)
+        t3, vae_pred = vae_engine.groupby_query(query)
+        t4, deepdb_pred = deepdb_engine.groupby_query(query)
+
+        (fr_cnt, fr_ave, fr_sum, fr_var, fr_std), g_comp_flow    = groupby_error(flow_pred, real, METRIC)
+        (pr_cnt, pr_ave, pr_sum, pr_var, pr_std), g_comp_verdict = groupby_error(verdict_pred, real, METRIC)
+        (vr_cnt, vr_ave, vr_sum, vr_var, vr_std), g_comp_vae     = groupby_error(vae_pred, real, METRIC)
+        (dr_cnt, dr_ave, dr_sum, _     , _     ), g_comp_deepdb  = groupby_error(deepdb_pred, real, METRIC)
         
         print(f'\nflow:{t1} ms\n{groupby_answer_to_str(flow_pred)}')
-        # print('err:', groupby_error(flow_pred, real, METRIC))
+        print("ERR: [{:.3f} {:.3f} {:.3f} {:.3f} {:.3f}] ".format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std))
         print(f'\nverdictdb:{t2} ms\n{groupby_answer_to_str(verdict_pred)}')
-        # print('err:', groupby_error(verdict_pred, real, METRIC))
+        print("ERR: [{:.3f} {:.3f} {:.3f} {:.3f} {:.3f}] ".format(pr_cnt, pr_ave, pr_sum, pr_var, pr_std,))
         print(f'\nvae:{t3} ms\n{groupby_answer_to_str(vae_pred)}')
-        # print('err:', groupby_error(vae_pred, real, METRIC))
+        print("ERR: [{:.3f} {:.3f} {:.3f} {:.3f} {:.3f}] ".format(vr_cnt, vr_ave, vr_sum, vr_var, vr_std,))
         print(f'\ndeepdb:{t4} ms\n{groupby_answer_to_str(deepdb_pred)}')
-        # print('err:', groupby_error(deepdb_pred, real, METRIC)[:-2])
+        print("ERR: [{:.3f} {:.3f} {:.3f}] ".format(dr_cnt, dr_ave, dr_sum))
 
-        fr_cnt, fr_ave, fr_sum, fr_var, fr_std = groupby_error(flow_pred, real, METRIC)
-        pr_cnt, pr_ave, pr_sum, pr_var, pr_std = groupby_error(verdict_pred, real, METRIC)
-        vr_cnt, vr_ave, vr_sum, vr_var, vr_std = groupby_error(vae_pred, real, METRIC)
-        dr_cnt, dr_ave, dr_sum, _     ,_       = groupby_error(deepdb_pred, real, METRIC)
-
-
-        print("flow_err:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std))
-        print("verdictdb_err:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f} std:{:.3f} ".
-                    format(pr_cnt, pr_ave, pr_sum, pr_var, pr_std,))
-        print("vae_err:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f} var:{:.3f}% std:{:.3f} ".
-                    format(vr_cnt, vr_ave, vr_sum, vr_var, vr_std,))
-        print("deepdb_err:\ncnt:{:.3f} ave:{:.3f} sum:{:.3f}".
-                    format(dr_cnt, dr_ave, dr_sum))
-
+        
         eval_csv.append([n_predicates, n_groups,
-                       fr_cnt, fr_ave, fr_sum, fr_var, fr_std, t1, 
-                       pr_cnt, pr_ave, pr_sum, pr_var, pr_std, t2, 
-                       vr_cnt, vr_ave, vr_sum, vr_var, vr_std, t3, 
-                       dr_cnt, dr_ave, dr_sum, t4,])
+                       fr_cnt, fr_ave, fr_sum, fr_var, fr_std, t1, g_comp_flow,
+                       pr_cnt, pr_ave, pr_sum, pr_var, pr_std, t2, g_comp_verdict,
+                       vr_cnt, vr_ave, vr_sum, vr_var, vr_std, t3, g_comp_vae,
+                       dr_cnt, dr_ave, dr_sum, t4, g_comp_deepdb, ])
         
 
     eval_csv = pd.DataFrame(eval_csv, columns=['n_predicates', 'n_groups',
-                    'flow_cnt_err', 'flow_avg_err', 'flow_sum_err', 'flow_var_err', 'flow_std_err', 'flow_latency',
-                    'verdict_cnt_err', 'verdict_avg_err', 'verdict_sum_err', 'verdict_var_err', 'verdict_std_err', 'verdict_latency',
-                    'vae_cnt_err', 'vae_avg_err', 'vae_sum_err', 'vae_var_err', 'vae_std_err', 'vae_latency',
-                    'deepdb_cnt_err', 'deepdb_avg_err', 'deepdb_sum_err', 'deepdb_latency'])
+                    'flow_cnt_err', 'flow_avg_err', 'flow_sum_err', 'flow_var_err', 'flow_std_err', 'flow_latency', 'g_comp_flow',
+                    'verdict_cnt_err', 'verdict_avg_err', 'verdict_sum_err', 'verdict_var_err', 'verdict_std_err', 'verdict_latency', 'g_comp_verdict',
+                    'vae_cnt_err', 'vae_avg_err', 'vae_sum_err', 'vae_var_err', 'vae_std_err', 'vae_latency', 'g_comp_vae',
+                    'deepdb_cnt_err', 'deepdb_avg_err', 'deepdb_sum_err', 'deepdb_latency', 'g_comp_deepdb', ])
     
-    eval_csv.to_csv(os.path.join(OUT_DIR, 'eval-groupby.csv'))
+    eval_csv.to_csv(os.path.join(OUT_DIR, f'eval-groupby{"" if not INCREASET_N_PREDICATES else "-vary"}.csv'))
     print("mean\n" + str(eval_csv.mean()) + '\n')
     print(".5\n" + str(eval_csv.quantile(0.5)) + '\n')
 
