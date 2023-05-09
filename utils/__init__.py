@@ -7,7 +7,7 @@ from .time_tracker import TimeTracker
 
 table_size = {
     "lineitem":6001215,
-    "lineitemext":29999795,
+    "lineitemext":6001215,
     'pm25':10000000,
     'flights': 10000000,
     'housing': 318356

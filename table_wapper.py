@@ -192,34 +192,42 @@ class TableWrapper:
         else:
             num_predicates = self.random_state.randint(1, len(self.categorical_cols) + 1)
 
-        # cols_to_apply_filtes = self.random_state.choice(self.numetric_ids, num_predicates)
-        num_point = min(self.random_state.randint(0, 3), num_predicates, len(self.categorical_ids))
-        # num_point = min(num_predicates, len(self.categorical_ids))
-        num_range = min(num_predicates - num_point, len(self.numetric_ids))
-
         target_id = self.random_state.choice(self.numetric_ids, 1)
         qry['target'] = self.get_col_name(target_id)
         if gb:
             groupby_id = self.random_state.choice(self.categorical_ids, 1)
             qry['gb'] = self.get_col_name(groupby_id)
 
+        cols_to_apply_filtes = self.random_state.choice(self.columns, num_predicates, replace=False)
+        cols_to_apply_filtes = [c for c in cols_to_apply_filtes]
+        if gb and qry['gb'] in cols_to_apply_filtes:
+            cols_to_apply_filtes.remove(qry['gb'])
+            
+
+        # num_point = min(self.random_state.randint(0, 3), num_predicates, len(self.categorical_ids))
+        # num_point = min(num_predicates, len(self.categorical_ids))
+        # num_range = min(num_predicates - num_point, len(self.numetric_ids))
+
+        
+
         loc = self.random_state.randint(0, self.n)
         tuple0 = self.data.iloc[loc].values
         loc = self.random_state.randint(0, self.n)
         tuple1 = self.data.iloc[loc].values
 
-        range_ids = list(self.random_state.choice(self.numetric_ids, size=num_range, replace=False))
-        point_ids = list(self.random_state.choice(self.categorical_ids, size=num_point, replace=False))
+        # range_ids = list(self.random_state.choice(self.numetric_ids, size=num_range, replace=False))
+        # point_ids = list(self.random_state.choice(self.categorical_ids, size=num_point, replace=False))
 
-        if gb:
-            if groupby_id in point_ids:
-                point_ids.remove(int(groupby_id))
-            num_point -= 1
-            num_predicates -= 1
+        # if gb:
+        #     if groupby_id in point_ids:
+        #         point_ids.remove(int(groupby_id))
+        #     num_point -= 1
+        #     num_predicates -= 1
 
-        for id in range_ids:
-            col = self.get_col_name(id)
-            op = self.random_state.choice(['>=', '<=', 'between'], size=1).item()
+        for col in cols_to_apply_filtes:
+            id = self.get_col_id(col)
+            # col = self.get_col_name(id)
+            op = self.random_state.choice(['>=', '<=', 'between'], size=1).item() if self.is_numetric_col[id] else '='
             if op == 'between':
                 lower, upper = min(tuple0[id], tuple1[id]), max(tuple0[id], tuple1[id])
                 if lower == upper:
@@ -233,14 +241,16 @@ class TableWrapper:
                     op = '<='
                 elif op == '<=' and abs(val - self.Mins[id]) < eps:
                     op = '>='
+                
+
 
             qry['where'][col] = (op, val)
 
-        for id in point_ids:
-            col = self.get_col_name(id)
-            op = '='
-            val = tuple0[id]
-            qry['where'][col] = (op, val)
+        # for id in point_ids:
+        #     col = self.get_col_name(id)
+        #     op = '='
+        #     val = tuple0[id]
+        #     qry['where'][col] = (op, val)
         if not self.is_query_legal(qry):
             print('no legal for ', qry, '\n\n\n')
             qry = self.generate_query(gb, num_predicates_ranges)

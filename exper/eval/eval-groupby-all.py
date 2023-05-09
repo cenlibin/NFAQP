@@ -20,13 +20,13 @@ SEED = 4233
 DATASET_NAME = 'lineitemext'
 DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
-REMAKE_VERDICTDB = True
+REMAKE_VERDICTDB = False
 MODEL_TAG = f'flow-{MODEL_SIZE}'
 MISSION_TAG = f'{MODEL_TAG}-{DATASET_NAME}-{DEQUAN_TYPE}'
 N_QUERIES = 80
 GAP = 50
-INCREASET_N_PREDICATES = False
-NUM_PREDICATES_RANGE = [1, 9]
+INCREASET_N_PREDICATES = True
+NUM_PREDICATES_RANGE = [1, -1]
 
 OUT_DIR = os.path.join(OUTPUT_ROOT, MISSION_TAG)
 INTEGRATOR = 'Vegas'
@@ -63,7 +63,7 @@ def groupby_eval():
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
     N, dim = table_wapper.data.shape
-    # NUM_PREDICATES_RANGE[1] = dim
+    NUM_PREDICATES_RANGE[1] = dim
     if INCREASET_N_PREDICATES:
         global N_QUERIES
         N_QUERIES = GAP * dim
@@ -110,13 +110,13 @@ def groupby_eval():
         (vr_cnt, vr_ave, vr_sum, vr_var, vr_std), g_comp_vae     = groupby_error(vae_pred, real, METRIC)
         (dr_cnt, dr_ave, dr_sum, _     , _     ), g_comp_deepdb  = groupby_error(deepdb_pred, real, METRIC)
         
-        print(f'\nflow:{t1} ms\n{groupby_answer_to_str(flow_pred)}')
+        print(f'\nflow:{t1} ms group_comp:{g_comp_flow}\n{groupby_answer_to_str(flow_pred)}')
         print("ERR: [{:.3f} {:.3f} {:.3f} {:.3f} {:.3f}] ".format(fr_cnt, fr_ave, fr_sum, fr_var, fr_std))
-        print(f'\nverdictdb:{t2} ms\n{groupby_answer_to_str(verdict_pred)}')
+        print(f'\nverdictdb:{t2} ms group_comp:{g_comp_verdict}\n{groupby_answer_to_str(verdict_pred)}')
         print("ERR: [{:.3f} {:.3f} {:.3f} {:.3f} {:.3f}] ".format(pr_cnt, pr_ave, pr_sum, pr_var, pr_std,))
-        print(f'\nvae:{t3} ms\n{groupby_answer_to_str(vae_pred)}')
+        print(f'\nvae:{t3} ms group_comp:{g_comp_vae}\n{groupby_answer_to_str(vae_pred)}')
         print("ERR: [{:.3f} {:.3f} {:.3f} {:.3f} {:.3f}] ".format(vr_cnt, vr_ave, vr_sum, vr_var, vr_std,))
-        print(f'\ndeepdb:{t4} ms\n{groupby_answer_to_str(deepdb_pred)}')
+        print(f'\ndeepdb:{t4} ms group_comp:{g_comp_deepdb}\n{groupby_answer_to_str(deepdb_pred)}')
         print("ERR: [{:.3f} {:.3f} {:.3f}] ".format(dr_cnt, dr_ave, dr_sum))
 
         

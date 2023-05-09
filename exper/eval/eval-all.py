@@ -26,7 +26,7 @@ REMAKE_VERDICTDB = False
 N_QUERIES = 200
 GAP = 200
 VARY_PREDICATES = True
-NUM_PREDICATES_RANGE = [1, 5]
+NUM_PREDICATES_RANGE = [1, -1]
 INTEGRATOR = 'Vegas'
 
 N_SAMPLE_POINT = 16000
@@ -46,6 +46,7 @@ def eval():
     # logger = get_logger(OUT_DIR, 'eval.log')
     model = torch.load(OUT_DIR + '/best.pt', map_location=DEVICE)
     table_wapper = TableWrapper(DATASET_NAME, OUT_DIR, DEQUAN_TYPE)
+    print(table_wapper.data.dtypes)
     N, dim = table_wapper.data.shape
     if VARY_PREDICATES:
         global N_QUERIES

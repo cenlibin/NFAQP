@@ -8,16 +8,16 @@ from VAE import *
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from utils import get_model_size_mb
-DATASET_NAME = 'lineitemext'
-ROWS_THRESHOLD = 999795
+DATASET_NAME = 'flights'
+ROWS_THRESHOLD = 600000
 
 parser = ArgumentParser(description='VAE')
 parser.add_argument('--model_name', type=str, action='store', default='VAE')
 parser.add_argument('--input_file', type=str, action='store', default=f'/home/clb/AQP/data/{DATASET_NAME}.csv')
 parser.add_argument('--output_dir', type=str, action='store', default='outputs/{}/'.format('vae-orders'))
 parser.add_argument('--data_output_dir', type=str, action='store', default='outputs/{}/'.format('vae-orders'))
-parser.add_argument('--batch_size', type=int, action='store', default=256)
-parser.add_argument('--latent_dim', type=int, action='store', default=256)
+parser.add_argument('--batch_size', type=int, action='store', default=512)
+parser.add_argument('--latent_dim', type=int, action='store', default=64)
 parser.add_argument('--neuron_list', type=int, action='store', default=200, help='Latent Dimension size Default: 200.')
 parser.add_argument('--epochs', type=int, action='store', default=100)
 parser.add_argument('--log_interval', type=int, action='store', default=25)
@@ -35,11 +35,11 @@ args.model_name = 'VAE'
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
-if os.path.exists(OUT_ROOT):
-    import shutil
-    shutil.rmtree(OUT_ROOT)
-# Create output dir
-os.makedirs(OUT_ROOT, exist_ok=True)
+# if os.path.exists(OUT_ROOT):
+#     import shutil
+#     shutil.rmtree(OUT_ROOT)
+# # Create output dir
+# os.makedirs(OUT_ROOT, exist_ok=True)
 
 # Set the seeds. Default: 42
 np.random.seed(args.seed)
@@ -84,6 +84,8 @@ print("Transforming Train/Test")
 if os.path.exists(os.path.join(OUT_ROOT, 'data.pkl')):
 # if os.path.exists(args.data_output_dir+'data.pkl'):
     x_train, x_test = pickle.load(open(os.path.join(OUT_ROOT, 'data.pkl'), 'rb'))
+    x_train = x_train[:int(0.95 * ROWS_THRESHOLD)]
+    x_test = x_test[:int(0.05 * ROWS_THRESHOLD)]
 else:
     x_train, x_test = transform_forward(args, df, num_cols, cat_cols, encoding_type)
     pickle.dump((x_train, x_test), open(os.path.join(OUT_ROOT, 'data.pkl'), 'wb'), protocol=4)

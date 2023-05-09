@@ -81,25 +81,30 @@ def batch_relative_error(pred, real):
 
 def sMAPE(pred, real):
     """ bounded relative error """
-    if abs(pred) + abs(real) == 0 :
+    if abs(pred) + abs(real) <= 1e-5 :
         return 0
     return 2 * abs(pred - real) / (abs(pred) + abs(real))
 
 def groupby_error(pred, real, eps=1e-9, metic=sMAPE):
     n_groups = len(real)
     n_finish_groups = 0
+    if len(pred) == 0:
+        return [np.nan, np.nan, np.nan, np.nan, np.nan], 0.0
 
-    errs = np.zeros([len(real), 5])
-    for i, k in enumerate(real.keys()):
-        if k not in pred:
-            errs[i] = np.ones(5) * 2.0
+    errs = []
+    for i, k in enumerate(pred.keys()):
+        if k not in real:
             continue
         n_finish_groups += 1
+        gerr = []
         for j, (p, r) in enumerate(zip(pred[k], real[k])):
             err = metic(p, r)
-            errs[i, j] = err
-    errs = errs.mean(0)
-
+            gerr.append(err)
+        if len(gerr) != 5:
+            gerr += [0, 0]
+        errs.append(gerr)
+    errs = np.array(errs).mean(0)
+    
     return list(errs), n_finish_groups / n_groups
 
 

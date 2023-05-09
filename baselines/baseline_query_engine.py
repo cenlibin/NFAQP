@@ -20,13 +20,12 @@ THRESH_HOLD = 16000
 # VAE 
 
 
-
 class VerdictEngine:
     def __init__(self, dataset_name, table_N, remake=False):
         if dataset_name not in ['lineitemext']:
             dataset_name += '_10BM'
-        else:
-            dataset_name += '5g'
+        # else:
+        #     dataset_name += '5g'
 
         host = 'localhost'
         user = 'root'
@@ -79,7 +78,8 @@ class VerdictEngine:
                 else:
                     pred.append(verdict_pred)
                 if agg == 'SUM':
-                    latency_ms = T.report_interval_time_ms()
+                    pass
+            latency_ms = T.report_interval_time_ms()
 
             # p_std = self.verdict_conn.sql(f'SELECT STDDEV({target}) FROM {TARGET_DB}.{self.dataset} {where}').to_numpy().item()
             # p_std = float(p_std if p_std is not None else 0)
