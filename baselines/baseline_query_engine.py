@@ -247,6 +247,7 @@ class VAEEngine:
 
 
 class DeepdbEngine:
+
     def __init__(self, dataset_name, table_N, remake=False):
         self.root = f'/home/clb/AQP/output/deepdb-{dataset_name}/'
         data_path = f'/home/clb/AQP/data/{dataset_name}'
@@ -358,3 +359,127 @@ class DeepdbEngine:
 
 
             return T.report_interval_time_ms(), result
+        
+
+class MySQLEngine:
+    def __init__(self, dataset_name, table_N, remake=False):
+        if dataset_name not in ['lineitemext']:
+            dataset_name += '_10BM'
+        # else:
+        #     dataset_name += '5g'
+
+        host = 'localhost'
+        user = 'root'
+        password = '7837'
+        port = 3306
+        connect_string = f'jdbc:mysql://{host}:{port}?user={user}&password={password}&useSSL=False&loglevel=error'
+        self.mysql_conn = pymysql.connect(
+            host=host,
+            port=port,
+            user=user,
+            passwd=password,
+            autocommit=True
+        ).cursor()
+        # self.verdict_conn = pyverdict.VerdictContext(connect_string)
+        # self.verdict_conn = pyverdict.mysql_context(host='localhost', user='root', password=password)
+        self.dataset = dataset_name
+        self.N = table_N
+        self.sample_rate = SAMPLE_RATE
+
+        if remake:
+            self.generate_sample(dataset_name)
+
+    def query(self, query):
+        with HiddenPrints():
+            T = TimeTracker()
+            target, gb = query['target'], query['gb']
+            # target = f'`{target}`'
+            where = '' if len(query['where']) == 0 else 'WHERE '
+            for col, (op, val) in query['where'].items():
+                # col = f'`{col}`'
+                if where != 'WHERE ':
+                    where += "AND "
+                if op == '=':
+                    val = f'\'{val}\''
+                if op == 'between':
+                    where += f'{col} BETWEEN {val[0]} AND {val[1]} '
+                else:
+                    where += f'{col} {op} {val} '
+
+            pred = []
+            for agg in ['COUNT', 'AVG', 'SUM', 'STDDEV']:
+                sql = f'SELECT {agg}({target}) FROM {TARGET_DB}.{self.dataset} {where}'
+                verdict_pred = self.mysql_conn.execute(sql)
+                # verdict_pred = self.verdict_conn.sql(sql).to_numpy().item()
+                # verdict_pred = float(verdict_pred if verdict_pred is not None else 0)
+                # verdict_pred /= (self.sample_rate if agg in ['COUNT', 'SUM'] else 1.0)
+                # if agg == 'COUNT':
+                #     pred.append(verdict_pred / self.N)  # sel
+                if agg == 'STDDEV':
+                    pred += [verdict_pred ** 2, verdict_pred]
+                else:
+                    pred.append(verdict_pred)
+                if agg == 'SUM':
+                    pass
+            latency_ms = T.report_interval_time_ms()
+
+            # p_std = self.verdict_conn.sql(f'SELECT STDDEV({target}) FROM {TARGET_DB}.{self.dataset} {where}').to_numpy().item()
+            # p_std = float(p_std if p_std is not None else 0)
+            # p_var = p_std ** 2
+            # pred = pred + [p_var, p_std]
+            return latency_ms, pred
+    
+    def groupby_query(self, query):
+        with HiddenPrints():
+            T = TimeTracker()
+            res = {}
+            target, gb = query['target'], query['gb']
+            target = f'{target}'
+            # gb = f'{gb}'
+            where = '' if len(query['where']) == 0 else 'WHERE '
+            for col, (op, val) in query['where'].items():
+                # col = f'`{col}`'
+                if where != 'WHERE ':
+                    where += "AND "
+                if op == '=':
+                    val = f'\'{val}\''
+                if op == 'between':
+                    where += f'{col} BETWEEN {val[0]} AND {val[1]} '
+                else:
+                    where += f'{col} {op} {val} '
+
+            for agg_i, agg in enumerate(['COUNT', 'AVG', 'SUM','STDDEV']):
+                sql = f'SELECT {gb}, {agg}({target}) FROM {TARGET_DB}.{self.dataset} {where}GROUP BY {gb}'
+                # mysql_pred = self.mysql_conn.execute(sql)
+                try:
+                    verdict_pred = self.verdict_conn.sql(sql)
+                except ValueError:
+                    verdict_pred = pd.DataFrame([])
+                # my = self.mysql_conn.execute(sql)
+                verdict_pred = verdict_pred.to_numpy()
+                for line in verdict_pred:
+                    gb_val, agg_val = line[0], line[1]
+                    agg_val = float(agg_val if agg_val is not None else 0)
+                    agg_val /= (self.sample_rate if agg in ['COUNT', 'SUM'] else 1.0)
+                    if gb_val not in res:
+                        res[gb_val] = [0.0] * agg_i
+                    if agg == "STDDEV":
+                        res[gb_val] += [agg_val ** 2, agg_val]
+                    else:
+                        res[gb_val].append(agg_val)
+                if agg == 'SUM':
+                    latency_ms = T.report_interval_time_ms()
+
+            return latency_ms, res
+
+
+    def generate_sample(self, dataset_name):
+        T  = TimeTracker()
+        sql = f"DROP TABLE IF EXISTS {TARGET_DB}.{dataset_name};"
+        self.mysql_conn.execute(sql)
+        T.report_interval_time_sec(sql)
+
+        sql = f'CREATE SCRAMBLE {TARGET_DB}.{dataset_name} FROM {SOURCE_DB}.{dataset_name} size {self.sample_rate}'
+        # sql = f'CREATE SCRAMBLE {TARGET_DB}.{dataset_name} FROM {SOURCE_DB}.{dataset_name}'
+        self.verdict_conn.sql(sql)
+        T.report_interval_time_sec(sql)

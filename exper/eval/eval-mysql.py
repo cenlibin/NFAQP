@@ -12,10 +12,10 @@ import pymysql
 from query_engine import QueryEngine
 from table_wapper import TableWrapper
 from utils import *
-from baselines import VerdictEngine, VAEEngine, DeepdbEngine
+from baselines import VerdictEngine, VAEEngine, DeepdbEngine, MySQLEngine
 from plot import plot_err
 
-METRIC = sMAPE              
+METRIC = relative_error            
 SEED = 42332
 
 DATASET_NAME = 'flights'
@@ -23,8 +23,8 @@ DEQUAN_TYPE = 'spline'
 MODEL_SIZE = 'tiny'
 REMAKE_VERDICTDB = False
 
-N_QUERIES = 200
-GAP = 200
+N_QUERIES = 20
+GAP = 20
 VARY_PREDICATES = True
 NUM_PREDICATES_RANGE = [1, -1]
 INTEGRATOR = 'Vegas'
@@ -63,7 +63,7 @@ def eval():
         out_path=OUT_DIR,
         device=DEVICE
     )
-    verdict_engine = VerdictEngine(DATASET_NAME, N, remake=REMAKE_VERDICTDB)
+    verdict_engine = MySQLEngine(DATASET_NAME, N, remake=REMAKE_VERDICTDB)
     vae_engine = VAEEngine(DATASET_NAME, N, remake=False)
     deepdb_engine = DeepdbEngine(DATASET_NAME, N, remake=False)
 
